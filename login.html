@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Login · Cooperativa</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  body{ display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f4f5f7 }
+  .login-box{ background:#fff;border-radius:16px;box-shadow:0 8px 32px rgba(16,24,38,.12);
+    width:100%;max-width:480px;padding:40px;text-align:center }
+  .logo{ font-size:48px;font-weight:900;color:#2a3f86;margin-bottom:8px;letter-spacing:-2px }
+  .logo small{ display:block;font-size:13px;letter-spacing:.5px;color:#6b7683;font-weight:600;margin-top:4px }
+  .intro{ font-size:14px;color:#6b7683;margin:24px 0 32px;line-height:1.6 }
+  .roles{ display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px }
+  .role-btn{ 
+    padding:20px;border-radius:12px;border:2px solid var(--hair);background:#fff;
+    cursor:pointer;font-weight:800;font-size:15px;color:var(--text);
+    transition:all .25s;display:flex;flex-direction:column;align-items:center;gap:8px
+  }
+  .role-btn:hover{ border-color:#2a3f86;background:#f7faff }
+  .role-btn i{ font-size:28px }
+  .people{ display:grid;grid-template-columns:1fr;gap:8px;margin-top:24px }
+  .person-btn{
+    padding:14px;border-radius:10px;border:1px solid var(--hair);background:#f7f8fa;
+    cursor:pointer;font-size:14px;color:var(--text);font-weight:600;transition:.2s
+  }
+  .person-btn:hover{ border-color:#2a3f86;background:#e8f0ff }
+  .back-btn{ margin-top:16px }
+  .demo-badge{ background:#ffd6cc;color:#8a4c00;padding:8px 12px;border-radius:8px;
+    font-size:12px;font-weight:700;margin-bottom:24px;display:inline-block }
+  @media(max-width:620px){ .roles{ grid-template-columns:1fr } }
+</style>
+</head>
+<body>
+<div class="login-box">
+  <div class="logo">COOP<small>Demonstração</small></div>
+  
+  <div class="demo-badge">🧪 Modo de demonstração · dados de teste</div>
+  
+  <div class="intro" id="intro">
+    Escolha seu perfil para acessar o sistema. Cada um tem uma visão diferente da operação.
+  </div>
+
+  <div id="roleSelect">
+    <div class="roles">
+      <button class="role-btn" data-role="Motorista"><i>🚗</i>Motorista</button>
+      <button class="role-btn" data-role="Fiscal"><i>📋</i>Fiscal</button>
+      <button class="role-btn" data-role="Proprietário"><i>🔑</i>Proprietário</button>
+      <button class="role-btn" data-role="Supervisor"><i>👨‍💼</i>Supervisor</button>
+      <button class="role-btn" data-role="Presidente"><i>🏛️</i>Presidente</button>
+    </div>
+  </div>
+
+  <div id="personSelect" style="display:none">
+    <div style="margin-bottom:16px">
+      <div style="font-size:12px;color:#6b7683;margin-bottom:8px">SELECIONE UMA PESSOA</div>
+      <div style="font-size:18px;font-weight:800;color:#2a3f86" id="selRole"></div>
+    </div>
+    <div class="people" id="peopleList"></div>
+    <button class="btn ghost back-btn" id="backBtn">← Voltar</button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+let PES=[];
+
+(async ()=>{
+  await seedIfEmpty();
+  PES = await DB.all("pessoas");
+
+  $$("#roleSelect .role-btn").forEach(btn => {
+    btn.onclick = async () => {
+      const role = btn.dataset.role;
+      const people = PES.filter(p => p.tipo === role);
+      if(!people.length) { toast("Nenhuma pessoa neste perfil","stop"); return; }
+      
+      $("#roleSelect").style.display = "none";
+      $("#personSelect").style.display = "block";
+      $("#selRole").textContent = role;
+      $("#peopleList").innerHTML = people.map(p => 
+        `<button class="person-btn" data-id="${p.id}" data-nome="${esc(p.nome)}" data-role="${role}">👤 ${esc(p.nome)}</button>`
+      ).join("");
+      
+      $$("#peopleList .person-btn").forEach(pb => {
+        pb.onclick = () => {
+          const user = { id: pb.dataset.id, nome: pb.dataset.nome, tipo: pb.dataset.role };
+          setUser(user);
+          // Redireciona pro dashboard apropriado
+          const links = {
+            "Motorista": "motorista.html",
+            "Fiscal": "fiscal.html",
+            "Proprietário": "proprietario.html",
+            "Supervisor": "supervisor.html",
+            "Presidente": "index.html",
+            "Administrador": "index.html"
+          };
+          location.href = links[user.tipo] || "index.html";
+        };
+      });
+    };
+  });
+
+  $("#backBtn").onclick = () => {
+    $("#personSelect").style.display = "none";
+    $("#roleSelect").style.display = "block";
+  };
+
+  // Se já tá logado, vai pro painel
+  if(getUser()) {
+    const user = getUser();
+    const links = {
+      "Motorista": "motorista.html",
+      "Fiscal": "fiscal.html",
+      "Proprietário": "proprietario.html",
+      "Supervisor": "supervisor.html",
+      "Presidente": "index.html",
+      "Administrador": "index.html"
+    };
+    location.href = links[user.tipo] || "index.html";
+  }
+})();
+</script>
+</body>
+</html>
