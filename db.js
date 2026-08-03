@@ -173,9 +173,9 @@
     await DB.setAll("pessoas", pessoas);
 
     const veiculos = [
-      { id:"v1", prefixo:"001", placa:"BA-0001", modelo:"Kombi", marca:"VW", ano:2015, capacidade:8, proprietarioId:"prop1", motoristaId:"mot1", situacao:"Ativo", escalaDias:[1,2,3,4,5], documentacao:"OK", ordemBase:1 },
-      { id:"v2", prefixo:"002", placa:"BA-0002", modelo:"Kombi", marca:"VW", ano:2016, capacidade:8, proprietarioId:"prop2", motoristaId:"mot2", situacao:"Ativo", escalaDias:[1,2,3,4,5], documentacao:"OK", ordemBase:2 },
-      { id:"v3", prefixo:"003", placa:"BA-0003", modelo:"Kombi", marca:"VW", ano:2017, capacidade:8, proprietarioId:"prop1", motoristaId:"", situacao:"Ativo", escalaDias:[1,2,3,4,5], documentacao:"OK", ordemBase:3 }
+      { id:"v1", prefixo:"001", placa:"BA-0001", modelo:"Kombi", marca:"VW", ano:2015, capacidade:8, proprietarioId:"prop1", motoristaId:"mot1", cobradorId:"mot2", situacao:"Ativo", escalaDias:[1,2,3,4,5], documentacao:"OK", ordemBase:1 },
+      { id:"v2", prefixo:"002", placa:"BA-0002", modelo:"Kombi", marca:"VW", ano:2016, capacidade:8, proprietarioId:"prop2", motoristaId:"mot2", cobradorId:"mot1", situacao:"Ativo", escalaDias:[1,2,3,4,5], documentacao:"OK", ordemBase:2 },
+      { id:"v3", prefixo:"003", placa:"BA-0003", modelo:"Kombi", marca:"VW", ano:2017, capacidade:8, proprietarioId:"prop1", motoristaId:"", cobradorId:"", situacao:"Ativo", escalaDias:[1,2,3,4,5], documentacao:"OK", ordemBase:3 }
     ];
     await DB.setAll("veiculos", veiculos);
 
