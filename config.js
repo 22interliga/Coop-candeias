@@ -22,6 +22,8 @@ window.COOP = {
   INTERVALO_MIN: 10,                  // intervalo padrão entre saídas
   PRIMEIRA_SAIDA: "05:00",            // horário da 1ª saída
   TOLERANCIA_MIN: 3,                  // atraso tolerado antes de marcar "atrasado"
+  INTERVALO_PARADA_MIN: 15,           // intervalo entre paradas (saída → parada 1 → parada 2...)
+  ROTA_PADRAO: "rota_candeias_madre",  // id da rota padrão
 
   PERFIS: ["Administrador","Presidente","Supervisor","Fiscal","Proprietário","Motorista"],
   TIPOS_PESSOA: ["Proprietário","Motorista","Supervisor","Fiscal","Presidente","Administrador"],
