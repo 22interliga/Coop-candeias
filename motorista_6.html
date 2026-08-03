@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Motorista · Cooperativa</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .stop-card{ background:#f7f8fa; border-radius:10px; padding:12px; margin-bottom:10px; display:grid; grid-template-columns:50px 1fr auto; gap:12px; align-items:start }
+  .stop-num{ font-size:20px; font-weight:800; color:#2a3f86; text-align:center }
+  .stop-info h4{ margin:0 0 4px 0; font-size:14px; font-weight:700; color:var(--text) }
+  .stop-info p{ margin:0; font-size:12px; color:#6b7683 }
+  .stop-time{ text-align:right; font-size:13px }
+  .stop-time b{ display:block; font-size:16px; font-weight:800; color:var(--text); font-family:monospace }
+  .stop-time small{ display:block; color:#6b7683; margin-top:2px }
+  .status-badge{ display:inline-block; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:700; background:#e8f0ff; color:#2a3f86 }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <div><div class="eyebrow">Meu painel</div><h1>Motorista</h1></div>
+  </div>
+
+  <div id="alertas"></div>
+
+  <div class="grid g-2 mb" id="kpis"></div>
+
+  <div class="grid" style="gap:16px">
+    <div class="card">
+      <div class="card-h"><h3>Meu veículo</h3></div>
+      <div class="card-b" id="veiculo"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><h3>Percurso de hoje</h3></div>
+      <div class="card-b" id="percurso"></div>
+    </div>
+  </div>
+
+  <div class="card mt">
+    <div class="card-h"><h3>Penalidades</h3></div>
+    <div class="card-b" id="penalidades"></div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+boot("motorista.html", async ()=>{
+  requireLogin();
+  const user = getUser();
+  if(user.tipo !== "Motorista") { toast("Acesso apenas para motoristas","stop"); logout(); return; }
+
+  const [veics, pens, fila, rota, pess] = await Promise.all([
+    DB.all("veiculos"),
+    DB.all("penalidades"),
+    FILA.get(T.today()),
+    DB.get("rotas", COOP.ROTA_PADRAO),
+    DB.all("pessoas")
+  ]);
+  
+  const veic = veics.find(v => v.motoristaId === user.id);
+  if(!veic) {
+    $("#veiculo").innerHTML = `<div class="table-empty">Nenhum veículo vinculado a você.</div>`;
+    return toast("Nenhum veículo encontrado","stop");
+  }
+
+  const prop = pess.find(p => p.id === veic.proprietarioId);
+  
+  // Alerta de documentação
+  if(veic.documentacao && veic.documentacao.toLowerCase().includes("vencida")) {
+    $("#alertas").innerHTML = `<div class="banner">⚠️ Sua documentação está <b>vencida</b>. Você não pode rodar até regularizar!</div>`;
+  }
+
+  // KPIs
+  const penalties = pens.filter(p => p.veiculoId === veic.id);
+  const kpi = (k,v,sub) => `<div class="card stat"><div class="k">${k}</div><div class="v small">${v}</div><div class="sub">${sub||""}</div></div>`;
+  $("#kpis").innerHTML = kpi("Penalidades em aberto", String(penalties.length), "este mês") + kpi("Documentação", veic.documentacao || "OK", "");
+
+  // Veículo
+  $("#veiculo").innerHTML = `
+    <div class="list-row"><span>Prefixo</span><b>${esc(veic.prefixo)}</b></div>
+    <div class="list-row"><span>Placa</span><b class="num">${esc(veic.placa)}</b></div>
+    <div class="list-row"><span>Modelo</span><span>${esc(veic.modelo)} · ${esc(veic.marca)}</span></div>
+    <div class="list-row"><span>Capacidade</span><b>${veic.capacidade} pass.</b></div>
+    <div class="list-row"><span>Proprietário</span><span>${esc(prop?.nome || "—")}</span></div>
+    <div class="list-row"><span>Situação</span>${sitChip(veic.situacao)}</div>`;
+
+  // Percurso de hoje
+  const meuLugar = fila.find(f => f.veiculoId === veic.id);
+  
+  if(!meuLugar) {
+    $("#percurso").innerHTML = `<div class="table-empty">Você não está escalado para hoje.</div>`;
+  } else {
+    const nowM = T.now();
+    let html = `<div style="margin-bottom:12px"><b>Posição na fila:</b> #${meuLugar.filaPosicao}</div>`;
+    html += (meuLugar.paradas||[]).map(p => {
+      const emAtraso = !p.real && T.toMin(p.previsto) < nowM - COOP.TOLERANCIA_MIN;
+      return `<div class="stop-card">
+        <div class="stop-num">${p.ordem}</div>
+        <div class="stop-info">
+          <h4>${esc(p.nome)}</h4>
+          <p>${p.real ? `Chegou às <b>${p.real}</b>` : "Aguardando..."}</p>
+        </div>
+        <div class="stop-time">
+          <b>${p.previsto}</b>
+          <small>PREVISTO ${emAtraso ? "⚠️ ATRASADO" : ""}</small>
+        </div>
+      </div>`;
+    }).join("");
+    $("#percurso").innerHTML = html;
+  }
+
+  // Penalidades
+  $("#penalidades").innerHTML = penalties.length 
+    ? `<table class="table"><thead><tr><th>Data</th><th>Motivo</th><th>Posições</th></tr></thead><tbody>` +
+      penalties.map(p => `<tr><td>${(p.data||"").split("-").reverse().join("/")}</td>
+        <td>${esc(p.motivo||"—")}</td><td class="num">${p.posicoes}</td></tr>`).join("") +
+      `</tbody></table>`
+    : `<div class="table-empty">Nenhuma penalidade registrada.</div>`;
+});
+</script>
+</body>
+</html>

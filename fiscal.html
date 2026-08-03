@@ -8,98 +8,90 @@
 <title>Fiscal · Cooperativa</title>
 <link rel="stylesheet" href="styles.css">
 <style>
-  .field-wrap{max-width:560px;margin:0 auto}
-  .seg.full{display:flex;width:100%}
-  .seg.full button{flex:1}
-  .veic-chips{display:flex;flex-wrap:wrap;gap:8px}
-  .vchip{border:1px solid var(--hair);background:#fff;border-radius:10px;padding:10px 14px;
-    font-weight:800;font-size:16px;cursor:pointer;min-width:64px;text-align:center}
-  .vchip.sel{background:var(--brand);color:#fff;border-color:var(--brand)}
-  .vchip small{display:block;font-weight:500;font-size:11px;color:var(--muted)}
-  .vchip.sel small{color:#c9d3ee}
-  .big-btn{width:100%;justify-content:center;font-size:16px;padding:15px}
-  .toggle{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--hair);
-    border-radius:10px;cursor:pointer;font-weight:700}
-  .toggle.on{border-color:var(--stop);background:rgba(226,73,73,.06);color:#b52d2d}
-  .sw{width:44px;height:26px;border-radius:20px;background:#cfd5df;position:relative;transition:.2s;flex:0 0 auto}
-  .sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
-    background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
-  .toggle.on .sw{background:var(--stop)}.toggle.on .sw::after{left:21px}
-  .photo-box{border:1px dashed var(--hair);border-radius:10px;padding:14px;text-align:center;color:var(--muted)}
-  .photo-box img{max-width:100%;border-radius:8px;margin-top:8px}
-  .hist-item{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid #f0f2f5}
-  .hist-item:last-child{border-bottom:0}
-  .hist-item img{width:54px;height:54px;object-fit:cover;border-radius:8px;flex:0 0 auto}
-  .hist-item .ph{width:54px;height:54px;border-radius:8px;background:#eef0f4;flex:0 0 auto}
+  .seg-box{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px }
+  .tab-btn{ padding:12px; border-radius:8px; border:2px solid var(--hair); background:#fff; cursor:pointer; font-weight:600; font-size:13px; transition:.2s }
+  .tab-btn.active{ border-color:#2a3f86; background:#e8f0ff; color:#2a3f86 }
+  .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px }
+  .form-col{ display:flex; flex-direction:column; gap:8px }
+  @media(max-width:620px){ .form-grid, .seg-box{ grid-template-columns:1fr } }
 </style>
 </head>
 <body>
-<div class="wrap field-wrap">
+<div class="wrap">
   <div class="page-head">
-    <div><div class="eyebrow">Fiscalização</div><h1>App do fiscal</h1></div>
+    <div><div class="eyebrow">Gestão de paradas</div><h1>Fiscalização</h1></div>
+    <div><input type="date" id="date" class="input" style="width:auto"></div>
   </div>
 
-  <div class="seg full mb" id="tabs">
-    <button class="active" data-t="reg">Registrar</button>
-    <button data-t="hist">Histórico</button>
-    <button data-t="pts">Pontos</button>
+  <div class="seg">
+    <button class="active" data-tab="registrar">Registrar</button>
+    <button data-tab="historico">Histórico <i id="histN" style="margin-left:6px;font-weight:700"></i></button>
   </div>
 
-  <!-- REGISTRAR -->
-  <div id="tab-reg">
-    <div class="card"><div class="card-b">
-      <div class="form-grid">
-        <div class="field"><label>Fiscal</label><select id="fFiscal"></select></div>
-        <div class="field"><label>Ponto de fiscalização</label><select id="fPonto"></select></div>
-      </div>
-
-      <div class="field">
-        <label>Veículo que passou</label>
-        <div class="veic-chips" id="vchips"></div>
-        <input class="input mt" id="vManual" placeholder="ou digite o prefixo (fora da fila)">
-      </div>
-
-      <div class="form-grid">
-        <div class="field"><label>Horário</label><input type="time" class="input" id="fHora"></div>
-        <div class="field"><label>Data</label><input type="date" class="input" id="fData"></div>
-      </div>
-
-      <div class="field"><label>Observações</label>
-        <textarea id="fObs" rows="2" placeholder="Opcional"></textarea></div>
-
-      <div class="field">
-        <div class="toggle" id="fIrreg"><div class="sw"></div><span>Registrar irregularidade</span></div>
-        <div id="irregBox" style="display:none" class="mt">
-          <select id="fIrregTipo"></select>
+  <!-- TAB: REGISTRAR -->
+  <div id="registrar" class="tab active">
+    <div class="card">
+      <div class="card-h"><h3>Nova fiscalização</h3></div>
+      <div class="card-b">
+        <div class="form-grid">
+          <div class="form-col">
+            <label class="lbl">Parada</label>
+            <select id="parada" class="input"></select>
+          </div>
+          <div class="form-col">
+            <label class="lbl">Veículo / Prefixo</label>
+            <select id="veiculo" class="input"><option value="">Escolha da fila</option></select>
+          </div>
         </div>
-      </div>
 
-      <div class="field"><label>Foto (opcional)</label>
-        <div class="photo-box" id="photoBox">
-          <input type="file" accept="image/*" capture="environment" id="fFoto" style="display:none">
-          <button class="btn ghost sm" id="btnFoto">📷 Tirar / anexar foto</button>
-          <div id="photoPrev"></div>
+        <div class="form-grid">
+          <div class="form-col">
+            <label class="lbl">Hora</label>
+            <input type="time" id="hora" class="input" required>
+          </div>
+          <div class="form-col">
+            <label class="lbl">Observação</label>
+            <input type="text" id="obs" class="input" placeholder="Opcional">
+          </div>
         </div>
+
+        <div style="margin-bottom:16px">
+          <label class="chk">
+            <input type="checkbox" id="irregular">
+            <span>Registrar irregularidade</span>
+          </label>
+          <div id="irregularOpt" style="display:none;margin-top:8px">
+            <select id="irregTipo" class="input" style="font-size:13px">
+              <option value="">Tipo de irregularidade</option>
+              <option value="Excesso de passageiros">Excesso de passageiros</option>
+              <option value="Documentação vencida">Documentação vencida</option>
+              <option value="Limpeza do veículo">Limpeza do veículo</option>
+              <option value="Falta de extintor">Falta de extintor</option>
+              <option value="Pane no veículo">Pane no veículo</option>
+              <option value="Atraso significativo">Atraso significativo</option>
+              <option value="Comportamento do motorista">Comportamento do motorista</option>
+              <option value="Outra">Outra</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-bottom:16px">
+          <label class="lbl">Foto (opcional)</label>
+          <input type="file" id="foto" class="input" accept="image/*">
+          <div id="fotoPreview" style="margin-top:8px"></div>
+        </div>
+
+        <button class="btn" id="registrarBtn">Registrar</button>
       </div>
-
-      <button class="btn big-btn" id="btnReg">Registrar passagem</button>
-    </div></div>
+    </div>
   </div>
 
-  <!-- HISTÓRICO -->
-  <div id="tab-hist" style="display:none">
-    <div class="card"><div class="card-h"><h3>Registros</h3><span class="chip mut" id="histN"><i></i>0</span></div>
-      <div class="card-b" id="histList"></div></div>
-  </div>
-
-  <!-- PONTOS -->
-  <div id="tab-pts" style="display:none">
-    <div class="card"><div class="card-b">
-      <div class="field"><label>Novo ponto</label>
-        <div class="btn-row"><input class="input" id="ptNome" placeholder="Ex.: Trevo de Candeias">
-          <button class="btn" id="ptAdd">Adicionar</button></div></div>
-      <div id="ptList" class="mt"></div>
-    </div></div>
+  <!-- TAB: HISTÓRICO -->
+  <div id="historico" class="tab" style="display:none">
+    <div class="card">
+      <div class="card-h"><h3>Registros do dia</h3></div>
+      <div class="card-b" id="histList"></div>
+    </div>
   </div>
 </div>
 
@@ -107,136 +99,160 @@
 <script src="db.js"></script>
 <script src="app.js"></script>
 <script>
-let PES=[], VEIC=[], PONTOS=[], selVeic=null, foto="";
-const K_FISCAL=COOP.COL+"lastFiscal", K_PONTO=COOP.COL+"lastPonto";
+let DATE=T.today(), VEIC=[], PES=[], ROTA=null, FILA=[];
+let selVeic="", fotoData=null;
 
 boot("fiscal.html", async ()=>{
-  $("#fData").value=T.today();
-  $("#fHora").value=T.toHHMM(T.now());
-  fillSel($("#fIrregTipo"), ["Atraso","Excesso de passageiros","Sem uniforme","Documentação","Fora da rota","Outra"]);
+  const user = getUser();
+  const filtered = user && user.tipo === "Fiscal";
 
-  $$("#tabs button").forEach(b=>b.onclick=()=>{
-    $$("#tabs button").forEach(x=>x.classList.remove("active")); b.classList.add("active");
-    ["reg","hist","pts"].forEach(t=>$("#tab-"+t).style.display = t===b.dataset.t?"":"none");
-    if(b.dataset.t==="hist") paintHist();
-    if(b.dataset.t==="pts") paintPontos();
+  $("#date").value = DATE;
+  $("#date").onchange = e => { DATE = e.target.value; refresh(); };
+
+  // Tabs
+  $$(".seg button").forEach(b => b.onclick = ()=>{
+    $$(".seg button").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    $$(".tab").forEach(t => t.style.display="none");
+    document.getElementById(b.dataset.tab).style.display="block";
   });
 
-  $("#fIrreg").onclick=()=>{ $("#fIrreg").classList.toggle("on");
-    $("#irregBox").style.display=$("#fIrreg").classList.contains("on")?"":"none"; };
+  // Hora default = agora
+  const now = new Date();
+  $("#hora").value = String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
 
-  $("#btnFoto").onclick=()=>$("#fFoto").click();
-  $("#fFoto").onchange=async e=>{ const f=e.target.files[0]; if(!f) return;
-    foto=await shrink(f); $("#photoPrev").innerHTML=`<img src="${foto}">`; };
+  // Checkbox irregularidade
+  $("#irregular").onchange = e => {
+    $("#irregularOpt").style.display = e.target.checked ? "block" : "none";
+  };
 
-  $("#vManual").oninput=()=>{ if($("#vManual").value){ selVeic=null; $$("#vchips .vchip").forEach(c=>c.classList.remove("sel")); } };
+  // Upload de foto
+  $("#foto").onchange = e => {
+    const f = e.target.files[0];
+    if(!f) { fotoData=null; $("#fotoPreview").innerHTML=""; return; }
+    const r = new FileReader();
+    r.onload = async ev => {
+      let img = new Image();
+      img.onload = () => {
+        const c = document.createElement("canvas");
+        const ctx = c.getContext("2d");
+        const maxW=720, maxH=720;
+        let w=img.width, h=img.height;
+        if(w>maxW){ h=Math.round(h*maxW/w); w=maxW; }
+        if(h>maxH){ w=Math.round(w*maxH/h); h=maxH; }
+        c.width=w; c.height=h;
+        ctx.drawImage(img,0,0,w,h);
+        fotoData = c.toDataURL("image/jpeg",0.8);
+        $("#fotoPreview").innerHTML = `<img src="${fotoData}" style="max-width:100%;border-radius:8px;max-height:240px">`;
+      };
+      img.src = ev.target.result;
+    };
+    r.readAsDataURL(f);
+  };
 
-  $("#ptAdd").onclick=addPonto;
-  $("#btnReg").onclick=registrar;
+  $("#registrarBtn").onclick = registrar;
 
   await load();
-  fillPeople($("#fFiscal"), PES.filter(p=>p.tipo==="Fiscal"));
-  if(localStorage.getItem(K_FISCAL)) $("#fFiscal").value=localStorage.getItem(K_FISCAL);
-  paintPontosSelect();
-  await paintVeicChips();
+  refresh();
 });
 
-function fillSel(sel,arr){ sel.innerHTML=arr.map(x=>`<option>${x}</option>`).join(""); }
-function fillPeople(sel,list){ sel.innerHTML=list.length?list.map(p=>`<option value="${p.id}">${esc(p.nome)}</option>`).join(""):`<option value="">— cadastre um fiscal —</option>`; }
-function vById(id){ return VEIC.find(v=>v.id===id)||{}; }
-
 async function load(){
-  [PES,VEIC,PONTOS]=await Promise.all([DB.all("pessoas"),DB.all("veiculos"),DB.all("pontos")]);
-  if(!PONTOS.length){ // semeia pontos padrão na primeira vez
-    for(const n of ["Saída — Candeias","Trevo (meio da rota)","Chegada — Madre de Deus"]) await DB.put("pontos",{nome:n});
-    PONTOS=await DB.all("pontos");
-  }
+  [VEIC, PES, ROTA, FILA] = await Promise.all([
+    DB.all("veiculos"),
+    DB.all("pessoas"),
+    DB.get("rotas", COOP.ROTA_PADRAO),
+    FILA.get(DATE)
+  ]);
 }
 
-function paintPontosSelect(){
-  $("#fPonto").innerHTML=PONTOS.map(p=>`<option value="${p.id}">${esc(p.nome)}</option>`).join("");
-  if(localStorage.getItem(K_PONTO)) $("#fPonto").value=localStorage.getItem(K_PONTO);
-}
+async function refresh(){
+  await load();
 
-async function paintVeicChips(){
-  const fila=(await FILA.get(T.today())).sort((a,b)=>a.ordem-b.ordem);
-  const el=$("#vchips");
-  if(!fila.length){ el.innerHTML=`<span class="muted" style="font-size:13px">Sem fila hoje — digite o prefixo abaixo.</span>`; return; }
-  el.innerHTML=fila.map(f=>{ const v=vById(f.veiculoId);
-    return `<div class="vchip" data-v="${f.veiculoId}">${esc(v.prefixo||"?")}<small>${f.previsto}</small></div>`; }).join("");
-  $$("#vchips .vchip").forEach(c=>c.onclick=()=>{
-    $$("#vchips .vchip").forEach(x=>x.classList.remove("sel")); c.classList.add("sel");
-    selVeic=c.dataset.v; $("#vManual").value="";
-  });
+  // Paradas
+  $("#parada").innerHTML = (ROTA?.paradas||[]).map(p=>
+    `<option value="${p.id}">${p.ordem}. ${esc(p.nome)}</option>`
+  ).join("");
+
+  // Veículos da fila
+  const veicOpts = FILA.map(f => {
+    const v = VEIC.find(x=>x.id===f.veiculoId)||{};
+    return `<option value="${f.veiculoId}">${esc(v.prefixo||"?")} · ${esc(nameOf(PES, v.motoristaId))}</option>`;
+  }).join("");
+  $("#veiculo").innerHTML = `<option value="">Escolha da fila</option>${veicOpts}`;
+
+  paintHist();
 }
 
 async function registrar(){
-  const fiscalId=$("#fFiscal").value;
-  if(!fiscalId) return toast("Selecione o fiscal","stop");
-  const prefixoManual=$("#vManual").value.trim();
-  if(!selVeic && !prefixoManual) return toast("Escolha ou digite o veículo","stop");
-  localStorage.setItem(K_FISCAL,fiscalId); localStorage.setItem(K_PONTO,$("#fPonto").value);
+  const parada = $("#parada").value;
+  const veicId = $("#veiculo").value;
+  const hora = $("#hora").value;
+  if(!parada) return toast("Escolha a parada","stop");
+  if(!hora) return toast("Defina a hora","stop");
 
-  await DB.put("fiscalizacoes",{
-    pontoId:$("#fPonto").value, fiscalId,
-    veiculoId:selVeic||"", prefixo:selVeic?vById(selVeic).prefixo:prefixoManual,
-    data:$("#fData").value, hora:$("#fHora").value, obs:$("#fObs").value,
-    irregular:$("#fIrreg").classList.contains("on"),
-    irregTipo:$("#fIrreg").classList.contains("on")?$("#fIrregTipo").value:"",
-    foto, ts:Date.now()
-  });
-  // reset leve
-  $("#fObs").value=""; foto=""; $("#photoPrev").innerHTML=""; $("#vManual").value="";
-  $("#fIrreg").classList.remove("on"); $("#irregBox").style.display="none";
-  selVeic=null; $$("#vchips .vchip").forEach(c=>c.classList.remove("sel"));
-  $("#fHora").value=T.toHHMM(T.now());
-  toast("Passagem registrada","go");
+  const v = VEIC.find(x=>x.id===veicId);
+  if(!v) return toast("Escolha um veículo","stop");
+
+  const reg = {
+    id: DB.uid(),
+    data: DATE,
+    parada: parada,
+    veiculoId: veicId,
+    prefixo: v.prefixo,
+    fiscalId: getUser()?.id || "",
+    hora: hora,
+    obs: $("#obs").value,
+    irregular: $("#irregular").checked,
+    irregTipo: $("#irregular").checked ? $("#irregTipo").value : "",
+    foto: fotoData || "",
+    ts: Date.now()
+  };
+
+  await DB.put("fiscalizacoes", reg);
+
+  // Atualiza a fila com o registro na parada
+  const filaRow = FILA.find(f => f.veiculoId === veicId);
+  if(filaRow) {
+    const paradaRow = filaRow.paradas.find(p => p.parada === parada);
+    if(paradaRow) {
+      paradaRow.real = hora;
+      if(!paradaRow.registros) paradaRow.registros = [];
+      paradaRow.registros.push(reg.id);
+      await FILA.saveRow(DATE, filaRow);
+    }
+  }
+
+  toast("Fiscalização registrada","go");
+  $("#obs").value = ""; $("#hora").value = T.toHHMM(T.now()); $("#foto").value = "";
+  fotoData = null; $("#fotoPreview").innerHTML = "";
+  $("#irregular").checked = false; $("#irregularOpt").style.display = "none";
+  refresh();
 }
 
 async function paintHist(){
-  const regs=(await DB.all("fiscalizacoes")).sort((a,b)=>b.ts-a.ts);
-  $("#histN").innerHTML=`<i></i>${regs.length}`;
-  $("#histList").innerHTML = regs.length ? regs.map(r=>{
-    const ponto=PONTOS.find(p=>p.id===r.pontoId)?.nome||"—";
+  const user = getUser();
+  let regs = (await DB.all("fiscalizacoes")).sort((a,b) => b.ts - a.ts);
+  if(user && user.tipo === "Fiscal") regs = regs.filter(r => r.fiscalId === user.id);
+  regs = regs.filter(r => r.data === DATE);
+
+  $("#histN").innerHTML = `<i></i>${regs.length}`;
+  $("#histList").innerHTML = regs.length ? regs.map(r => {
+    const p = ROTA?.paradas?.find(x=>x.id===r.parada);
     return `<div class="hist-item">
       ${r.foto?`<img src="${r.foto}">`:`<div class="ph"></div>`}
       <div style="flex:1">
         <div><b>${esc(r.prefixo||"?")}</b> · <span class="num">${r.hora}</span>
           ${r.irregular?`<span class="chip stop" style="margin-left:6px"><i></i>${esc(r.irregTipo||"Irregular")}</span>`:""}</div>
-        <div class="muted" style="font-size:13px">${esc(ponto)} · ${esc(nameOf(PES,r.fiscalId))} · ${(r.data||"").split("-").reverse().join("/")}</div>
+        <div class="muted" style="font-size:13px">${esc(p?.nome||"?")} · ${esc(nameOf([...PES], r.fiscalId))} · ${(r.data||"").split("-").reverse().join("/")}</div>
         ${r.obs?`<div style="font-size:13px;margin-top:2px">${esc(r.obs)}</div>`:""}
       </div>
       <button class="btn ghost sm" data-del="${r.id}">×</button>
     </div>`;
-  }).join("") : `<div class="table-empty">Nenhum registro ainda.</div>`;
-  $$("#histList [data-del]").forEach(b=>b.onclick=async()=>{ await DB.del("fiscalizacoes",b.dataset.del); paintHist(); });
-}
+  }).join("") : `<div class="table-empty">Nenhum registro para este dia.</div>`;
 
-async function addPonto(){
-  const n=$("#ptNome").value.trim(); if(!n) return toast("Informe o nome do ponto","stop");
-  await DB.put("pontos",{nome:n}); $("#ptNome").value="";
-  PONTOS=await DB.all("pontos"); paintPontos(); paintPontosSelect(); toast("Ponto adicionado","go");
-}
-function paintPontos(){
-  $("#ptList").innerHTML = PONTOS.length ? PONTOS.map(p=>`
-    <div class="list-row"><span>📍 ${esc(p.nome)}</span>
-      <button class="btn ghost sm" data-dp="${p.id}">Excluir</button></div>`).join("")
-    : `<div class="table-empty">Nenhum ponto cadastrado.</div>`;
-  $$("#ptList [data-dp]").forEach(b=>b.onclick=async()=>{ await DB.del("pontos",b.dataset.dp);
-    PONTOS=await DB.all("pontos"); paintPontos(); paintPontosSelect(); });
-}
-
-// reduz a foto para caber no armazenamento (thumb ~720px, jpeg)
-function shrink(file){
-  return new Promise(res=>{
-    const img=new Image(), r=new FileReader();
-    r.onload=()=>{ img.onload=()=>{
-      const max=720, sc=Math.min(1,max/Math.max(img.width,img.height));
-      const c=document.createElement("canvas"); c.width=img.width*sc; c.height=img.height*sc;
-      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
-      res(c.toDataURL("image/jpeg",0.6));
-    }; img.src=r.result; };
-    r.readAsDataURL(file);
+  $$("#histList [data-del]").forEach(b => b.onclick = async () => {
+    await DB.del("fiscalizacoes", b.dataset.del);
+    paintHist();
   });
 }
 </script>

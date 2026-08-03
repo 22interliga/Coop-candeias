@@ -7,177 +7,444 @@
 <link rel="manifest" href="manifest.json">
 <title>Cadastros · Cooperativa</title>
 <link rel="stylesheet" href="styles.css">
+<style>
+  .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px }
+  .form-col{ display:flex; flex-direction:column; gap:6px }
+  .lbl{ font-size:12px; font-weight:700; color:#6b7683; text-transform:uppercase; letter-spacing:.5px }
+  .paradas-list{ border:1px solid var(--hair); border-radius:10px; overflow:hidden }
+  .parada-row{ display:grid; grid-template-columns:40px 1fr 40px; gap:8px; align-items:center; padding:12px; border-bottom:1px solid var(--hair); background:#f7f8fa }
+  .parada-row:last-child{ border-bottom:none }
+  .parada-row input{ padding:8px 10px; border:1px solid var(--hair); border-radius:6px; font-size:13px }
+  .parada-row button{ padding:4px 8px; }
+  @media(max-width:768px){ .form-grid{ grid-template-columns:1fr } }
+</style>
 </head>
 <body>
 <div class="wrap">
   <div class="page-head">
-    <div><div class="eyebrow">Cadastros</div><h1>Frota, pessoas e cooperativa</h1></div>
-    <button class="btn" id="btnNovo">+ Novo</button>
+    <div><div class="eyebrow">Configuração</div><h1>Cadastros</h1></div>
   </div>
 
-  <div class="tabs" id="tabs">
-    <button data-tab="veiculos" class="active">Veículos</button>
+  <div class="seg">
+    <button class="active" data-tab="veiculos">Veículos</button>
     <button data-tab="pessoas">Pessoas</button>
+    <button data-tab="rotas">Rotas</button>
     <button data-tab="cooperativa">Cooperativa</button>
   </div>
 
-  <div class="card"><div class="card-b" id="panel"></div></div>
+  <!-- VEÍCULOS -->
+  <div id="veiculos" class="tab active">
+    <div class="card">
+      <div class="card-h"><h3>Veículos ativos</h3>
+        <button class="btn" id="addVeic">+ Novo</button>
+      </div>
+      <div class="card-b" id="veicList"></div>
+    </div>
+  </div>
+
+  <!-- PESSOAS -->
+  <div id="pessoas" class="tab" style="display:none">
+    <div class="card">
+      <div class="card-h"><h3>Pessoas</h3>
+        <button class="btn" id="addPes">+ Novo</button>
+      </div>
+      <div class="card-b" id="pesList"></div>
+    </div>
+  </div>
+
+  <!-- ROTAS -->
+  <div id="rotas" class="tab" style="display:none">
+    <div class="card">
+      <div class="card-h"><h3>Rotas de transporte</h3>
+        <button class="btn" id="addRota">+ Novo</button>
+      </div>
+      <div class="card-b" id="rotaList"></div>
+    </div>
+  </div>
+
+  <!-- COOPERATIVA -->
+  <div id="cooperativa" class="tab" style="display:none">
+    <div class="card">
+      <div class="card-h"><h3>Informações da cooperativa</h3></div>
+      <div class="card-b">
+        <div class="form-grid">
+          <div class="form-col">
+            <label class="lbl">Nome</label>
+            <input type="text" id="coopNome" class="input">
+          </div>
+          <div class="form-col">
+            <label class="lbl">CNPJ</label>
+            <input type="text" id="coopCNPJ" class="input" placeholder="00.000.000/0000-00">
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-col">
+            <label class="lbl">Rota principal</label>
+            <input type="text" id="coopRota" class="input" placeholder="Origem → Destino">
+          </div>
+          <div class="form-col">
+            <label class="lbl">Presidente</label>
+            <select id="coopPres" class="input"></select>
+          </div>
+        </div>
+        <button class="btn" id="saveCoop">Salvar alterações</button>
+      </div>
+    </div>
+  </div>
 </div>
 
-<!-- Modal veículo -->
-<div class="modal-bg" id="mVeic"><div class="modal">
-  <div class="m-h"><h3 id="vTit">Veículo</h3><button class="x" onclick="closeModal('mVeic')">×</button></div>
-  <div class="m-b">
+<!-- MODAL: Editar veículo -->
+<div id="modalVeic" class="modal" style="display:none">
+  <div class="modal-content">
+    <button class="modal-close" id="closeVeic">×</button>
+    <h2>Editar veículo</h2>
     <div class="form-grid">
-      <div class="field"><label>Prefixo</label><input class="input" id="vPref"></div>
-      <div class="field"><label>Placa</label><input class="input" id="vPlaca"></div>
-      <div class="field"><label>Modelo</label><input class="input" id="vModelo"></div>
-      <div class="field"><label>Marca</label><input class="input" id="vMarca"></div>
-      <div class="field"><label>Ano</label><input class="input" id="vAno" type="number"></div>
-      <div class="field"><label>Capacidade</label><input class="input" id="vCap" type="number"></div>
-      <div class="field"><label>Proprietário</label><select id="vProp"></select></div>
-      <div class="field"><label>Motorista principal</label><select id="vMot"></select></div>
-      <div class="field"><label>Telefone</label><input class="input" id="vTel"></div>
-      <div class="field"><label>Situação</label><select id="vSit"></select></div>
+      <div class="form-col">
+        <label class="lbl">Prefixo</label>
+        <input type="text" id="vmPrefixo" class="input">
+      </div>
+      <div class="form-col">
+        <label class="lbl">Placa</label>
+        <input type="text" id="vmPlaca" class="input">
+      </div>
+      <div class="form-col">
+        <label class="lbl">Modelo</label>
+        <input type="text" id="vmModelo" class="input">
+      </div>
+      <div class="form-col">
+        <label class="lbl">Marca</label>
+        <input type="text" id="vmMarca" class="input">
+      </div>
+      <div class="form-col">
+        <label class="lbl">Ano</label>
+        <input type="number" id="vmAno" class="input" min="2000" max="2050">
+      </div>
+      <div class="form-col">
+        <label class="lbl">Capacidade (passageiros)</label>
+        <input type="number" id="vmCap" class="input" min="1" max="50">
+      </div>
+      <div class="form-col">
+        <label class="lbl">Proprietário</label>
+        <select id="vmProp" class="input"></select>
+      </div>
+      <div class="form-col">
+        <label class="lbl">Motorista</label>
+        <select id="vmMot" class="input"></select>
+      </div>
+      <div class="form-col">
+        <label class="lbl">Situação</label>
+        <select id="vmSit" class="input">
+          <option value="Ativo">Ativo</option>
+          <option value="Manutenção">Manutenção</option>
+          <option value="Suspenso">Suspenso</option>
+          <option value="Inativo">Inativo</option>
+        </select>
+      </div>
+      <div class="form-col">
+        <label class="lbl">Documentação</label>
+        <input type="text" id="vmDoc" class="input" placeholder="OK ou vencida">
+      </div>
     </div>
-    <div class="field"><label>Escala (dias de operação)</label><div id="vDias" class="btn-row"></div></div>
-    <div class="field"><label>Documentação</label><input class="input" id="vDoc" placeholder="OK / Vencida / observação"></div>
+    <div style="margin-bottom:16px">
+      <label class="lbl">Dias de escala</label>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(70px,1fr));gap:8px">
+        ${COOP.DIAS.map((d,i)=>`<label class="chk"><input type="checkbox" class="dia-check" value="${i}"> ${d}</label>`).join("")}
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" id="saveVeic">Salvar</button>
+      <button class="btn ghost" id="delVeic">Excluir</button>
+    </div>
   </div>
-  <div class="m-f"><button class="btn ghost" onclick="closeModal('mVeic')">Cancelar</button>
-    <button class="btn" id="vSalvar">Salvar veículo</button></div>
-</div></div>
+</div>
 
-<!-- Modal pessoa -->
-<div class="modal-bg" id="mPes"><div class="modal">
-  <div class="m-h"><h3 id="pTit">Pessoa</h3><button class="x" onclick="closeModal('mPes')">×</button></div>
-  <div class="m-b"><div class="form-grid">
-    <div class="field"><label>Nome</label><input class="input" id="pNome"></div>
-    <div class="field"><label>Tipo</label><select id="pTipo"></select></div>
-    <div class="field"><label>Telefone</label><input class="input" id="pTel"></div>
-    <div class="field"><label>Documento</label><input class="input" id="pDoc"></div>
-  </div></div>
-  <div class="m-f"><button class="btn ghost" onclick="closeModal('mPes')">Cancelar</button>
-    <button class="btn" id="pSalvar">Salvar pessoa</button></div>
-</div></div>
+<!-- MODAL: Editar pessoa -->
+<div id="modalPes" class="modal" style="display:none">
+  <div class="modal-content">
+    <button class="modal-close" id="closePes">×</button>
+    <h2>Editar pessoa</h2>
+    <div class="form-grid">
+      <div class="form-col">
+        <label class="lbl">Nome</label>
+        <input type="text" id="pmNome" class="input">
+      </div>
+      <div class="form-col">
+        <label class="lbl">Tipo</label>
+        <select id="pmTipo" class="input">
+          ${COOP.TIPOS_PESSOA.map(t=>`<option value="${t}">${t}</option>`).join("")}
+        </select>
+      </div>
+      <div class="form-col">
+        <label class="lbl">Telefone</label>
+        <input type="tel" id="pmTel" class="input">
+      </div>
+      <div class="form-col">
+        <label class="lbl">Documento</label>
+        <input type="text" id="pmDoc" class="input" placeholder="CPF/RG">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" id="savePes">Salvar</button>
+      <button class="btn ghost" id="delPes">Excluir</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editar rota -->
+<div id="modalRota" class="modal" style="display:none">
+  <div class="modal-content">
+    <button class="modal-close" id="closeRota">×</button>
+    <h2>Editar rota</h2>
+    <div class="form-grid">
+      <div class="form-col">
+        <label class="lbl">Nome da rota</label>
+        <input type="text" id="rmNome" class="input" placeholder="Ex: Candeias → Madre de Deus">
+      </div>
+      <div class="form-col">
+        <label class="lbl">Origem</label>
+        <input type="text" id="rmOrig" class="input">
+      </div>
+      <div class="form-col">
+        <label class="lbl">Destino</label>
+        <input type="text" id="rmDest" class="input">
+      </div>
+    </div>
+    <div style="margin-bottom:16px">
+      <label class="lbl">Paradas do percurso</label>
+      <div class="paradas-list" id="rmParadas"></div>
+      <button class="btn ghost" id="addParada" style="margin-top:8px;width:100%">+ Adicionar parada</button>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" id="saveRota">Salvar</button>
+      <button class="btn ghost" id="delRota">Excluir</button>
+    </div>
+  </div>
+</div>
 
 <script src="config.js"></script>
 <script src="db.js"></script>
 <script src="app.js"></script>
 <script>
-let TAB="veiculos", VEIC=[], PES=[], COOPR={};
+let VEIC=[], PES=[], ROTAS=[], COOP_DATA={};
+let currentVeic=null, currentPes=null, currentRota=null;
 
 boot("cadastros.html", async ()=>{
-  fillSel($("#vSit"), COOP.SITUACOES);
-  fillSel($("#pTipo"), COOP.TIPOS_PESSOA);
-  $("#vDias").innerHTML = COOP.DIAS.map((d,i)=>`<button type="button" class="btn ghost sm dia" data-d="${i}">${d}</button>`).join("");
-  $$("#vDias .dia").forEach(b=>b.onclick=()=>b.classList.toggle("amber"));
-
-  $$("#tabs button").forEach(b=>b.onclick=()=>{
-    $$("#tabs button").forEach(x=>x.classList.remove("active")); b.classList.add("active");
-    TAB=b.dataset.tab; render();
+  // Tabs
+  $$(".seg button").forEach(b => b.onclick = ()=>{
+    $$(".seg button").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    $$(".tab").forEach(t => t.style.display="none");
+    document.getElementById(b.dataset.tab).style.display="block";
   });
-  $("#btnNovo").onclick=()=> TAB==="veiculos"?openVeic():TAB==="pessoas"?openPes():toast("Edite a cooperativa abaixo");
-  $("#vSalvar").onclick=saveVeic;
-  $("#pSalvar").onclick=savePes;
 
-  await load(); render();
+  // Botões veículos
+  $("#addVeic").onclick = () => { currentVeic=null; openModalVeic({}); };
+  $("#closeVeic").onclick = () => $("#modalVeic").style.display="none";
+  $("#saveVeic").onclick = saveVeic;
+  $("#delVeic").onclick = delVeic;
+
+  // Botões pessoas
+  $("#addPes").onclick = () => { currentPes=null; openModalPes({}); };
+  $("#closePes").onclick = () => $("#modalPes").style.display="none";
+  $("#savePes").onclick = savePes;
+  $("#delPes").onclick = delPes;
+
+  // Botões rotas
+  $("#addRota").onclick = () => { currentRota=null; openModalRota({}); };
+  $("#closeRota").onclick = () => $("#modalRota").style.display="none";
+  $("#saveRota").onclick = saveRota;
+  $("#delRota").onclick = delRota;
+  $("#addParada").onclick = addParadaField;
+
+  // Botão cooperativa
+  $("#saveCoop").onclick = saveCoop;
+
+  await load();
+  paintAll();
 });
 
-function fillSel(sel,arr){ sel.innerHTML=arr.map(x=>`<option>${x}</option>`).join(""); }
 async function load(){
-  [VEIC,PES]=await Promise.all([DB.all("veiculos"),DB.all("pessoas")]);
-  COOPR=(await DB.get("cooperativa","coop"))||{id:"coop"};
-}
-function propSel(){ return PES.filter(p=>p.tipo==="Proprietário"); }
-function motSel(){ return PES.filter(p=>p.tipo==="Motorista"); }
-function peopleOpts(list,val){ return `<option value="">—</option>`+list.map(p=>`<option value="${p.id}" ${p.id===val?"selected":""}>${esc(p.nome)}</option>`).join(""); }
-
-function render(){
-  if(TAB==="veiculos") return renderVeic();
-  if(TAB==="pessoas")  return renderPes();
-  return renderCoop();
+  [VEIC, PES, ROTAS, COOP_DATA] = await Promise.all([
+    DB.all("veiculos"),
+    DB.all("pessoas"),
+    DB.all("rotas"),
+    DB.get("cooperativa", "coop")
+  ]);
+  COOP_DATA = COOP_DATA || { id:"coop", nome:COOP.COOPERATIVA, cnpj:"", rota:COOP.ROTA, presidente:"" };
 }
 
-function renderVeic(){
-  $("#btnNovo").style.display="";
-  $("#panel").innerHTML = VEIC.length ? `<table class="table"><thead><tr>
-    <th>Prefixo</th><th>Placa</th><th>Modelo</th><th>Cap.</th><th>Proprietário</th>
-    <th>Motorista</th><th>Escala</th><th>Situação</th><th></th></tr></thead><tbody>`+
-    VEIC.map(v=>`<tr>
-      <td><b>${esc(v.prefixo)}</b></td><td class="num">${esc(v.placa)}</td><td>${esc(v.modelo)}</td>
-      <td class="num">${v.capacidade}</td><td>${esc(nameOf(PES,v.proprietarioId))}</td>
-      <td>${esc(nameOf(PES,v.motoristaId))}</td><td class="muted" style="font-size:12px">${diasLabel(v.escalaDias)}</td>
-      <td>${sitChip(v.situacao)}</td>
-      <td class="right"><button class="btn ghost sm" data-e="${v.id}">Editar</button></td></tr>`).join("")
-    +`</tbody></table>`
-    : `<div class="table-empty">Nenhum veículo. Clique em “+ Novo”.</div>`;
-  $$("#panel [data-e]").forEach(b=>b.onclick=()=>openVeic(VEIC.find(v=>v.id===b.dataset.e)));
+async function paintAll(){
+  // Veículos
+  $("#veicList").innerHTML = VEIC.length ? VEIC.map(v=>`<div class="table-row" onclick="openModalVeic('${v.id}')">
+    <b>${esc(v.prefixo)}</b><span class="muted">${esc(v.placa)} · ${esc(v.modelo)}</span>
+  </div>`).join("") : `<div class="table-empty">Nenhum veículo cadastrado.</div>`;
+
+  // Pessoas
+  $("#pesList").innerHTML = PES.length ? PES.map(p=>`<div class="table-row" onclick="openModalPes('${p.id}')">
+    <b>${esc(p.nome)}</b><span class="muted">${p.tipo} · ${esc(p.telefone)}</span>
+  </div>`).join("") : `<div class="table-empty">Nenhuma pessoa cadastrada.</div>`;
+
+  // Rotas
+  $("#rotaList").innerHTML = ROTAS.length ? ROTAS.map(r=>`<div class="table-row" onclick="openModalRota('${r.id}')">
+    <b>${esc(r.nome)}</b><span class="muted">${r.paradas?.length||0} paradas</span>
+  </div>`).join("") : `<div class="table-empty">Nenhuma rota cadastrada.</div>`;
+
+  // Cooperativa
+  $("#coopNome").value = COOP_DATA.nome || "";
+  $("#coopCNPJ").value = COOP_DATA.cnpj || "";
+  $("#coopRota").value = COOP_DATA.rota || "";
+  $("#coopPres").innerHTML = `<option value="">Ninguém</option>${PES.filter(p=>p.tipo==="Presidente").map(p=>`<option value="${p.id}" ${COOP_DATA.presidente===p.id?"selected":""}>${esc(p.nome)}</option>`).join("")}`;
 }
 
-function renderPes(){
-  $("#btnNovo").style.display="";
-  $("#panel").innerHTML = PES.length ? `<table class="table"><thead><tr>
-    <th>Nome</th><th>Tipo</th><th>Telefone</th><th></th></tr></thead><tbody>`+
-    PES.map(p=>`<tr><td><b>${esc(p.nome)}</b></td><td><span class="chip brand"><i></i>${esc(p.tipo)}</span></td>
-      <td class="num">${esc(p.telefone||"—")}</td>
-      <td class="right"><button class="btn ghost sm" data-e="${p.id}">Editar</button></td></tr>`).join("")
-    +`</tbody></table>` : `<div class="table-empty">Nenhuma pessoa cadastrada.</div>`;
-  $$("#panel [data-e]").forEach(b=>b.onclick=()=>openPes(PES.find(p=>p.id===b.dataset.e)));
+function openModalVeic(id){
+  currentVeic = id === "" ? null : VEIC.find(v=>v.id===id);
+  if(!currentVeic) currentVeic = {};
+  
+  $("#vmPrefixo").value = currentVeic.prefixo || "";
+  $("#vmPlaca").value = currentVeic.placa || "";
+  $("#vmModelo").value = currentVeic.modelo || "";
+  $("#vmMarca").value = currentVeic.marca || "";
+  $("#vmAno").value = currentVeic.ano || new Date().getFullYear();
+  $("#vmCap").value = currentVeic.capacidade || 8;
+  $("#vmDoc").value = currentVeic.documentacao || "OK";
+  $("#vmSit").value = currentVeic.situacao || "Ativo";
+  
+  $("#vmProp").innerHTML = `<option value="">Ninguém</option>${PES.filter(p=>p.tipo==="Proprietário").map(p=>`<option value="${p.id}" ${currentVeic.proprietarioId===p.id?"selected":""}>${esc(p.nome)}</option>`).join("")}`;
+  $("#vmMot").innerHTML = `<option value="">Ninguém</option>${PES.filter(p=>p.tipo==="Motorista").map(p=>`<option value="${p.id}" ${currentVeic.motoristaId===p.id?"selected":""}>${esc(p.nome)}</option>`).join("")}`;
+  
+  $$(".dia-check").forEach(c => c.checked = (currentVeic.escalaDias||[]).includes(Number(c.value)));
+  $("#modalVeic").style.display="block";
 }
 
-function renderCoop(){
-  $("#btnNovo").style.display="none";
-  $("#panel").innerHTML=`
-    <div class="form-grid">
-      <div class="field"><label>Nome da cooperativa</label><input class="input" id="cNome" value="${esc(COOPR.nome||COOP.COOPERATIVA)}"></div>
-      <div class="field"><label>CNPJ</label><input class="input" id="cCnpj" value="${esc(COOPR.cnpj||"")}"></div>
-      <div class="field"><label>Presidente</label><input class="input" id="cPres" value="${esc(COOPR.presidente||"")}"></div>
-      <div class="field"><label>Rota</label><input class="input" id="cRota" value="${esc(COOPR.rota||COOP.ROTA)}"></div>
-    </div>
-    <button class="btn mt" id="cSalvar">Salvar cooperativa</button>`;
-  $("#cSalvar").onclick=async()=>{
-    await DB.put("cooperativa",{id:"coop",nome:$("#cNome").value,cnpj:$("#cCnpj").value,
-      presidente:$("#cPres").value,rota:$("#cRota").value,caixa:COOPR.caixa||0});
-    toast("Cooperativa salva","go"); await load();
-  };
-}
-
-let editV=null;
-function openVeic(v){
-  editV=v||null;
-  $("#vTit").textContent=v?"Editar veículo":"Novo veículo";
-  $("#vProp").innerHTML=peopleOpts(propSel(), v?.proprietarioId);
-  $("#vMot").innerHTML=peopleOpts(motSel(), v?.motoristaId);
-  $("#vPref").value=v?.prefixo||""; $("#vPlaca").value=v?.placa||""; $("#vModelo").value=v?.modelo||"";
-  $("#vMarca").value=v?.marca||""; $("#vAno").value=v?.ano||""; $("#vCap").value=v?.capacidade||"";
-  $("#vTel").value=v?.telefone||""; $("#vDoc").value=v?.documentacao||"OK"; $("#vSit").value=v?.situacao||"Ativo";
-  const dias=new Set(v?.escalaDias||[]);
-  $$("#vDias .dia").forEach(b=>b.classList.toggle("amber", dias.has(Number(b.dataset.d))));
-  openModal("mVeic");
-}
 async function saveVeic(){
-  if(!$("#vPref").value) return toast("Informe o prefixo","stop");
-  const dias=$$("#vDias .dia").filter(b=>b.classList.contains("amber")).map(b=>Number(b.dataset.d));
-  const obj={...(editV||{}), prefixo:$("#vPref").value, placa:$("#vPlaca").value, modelo:$("#vModelo").value,
-    marca:$("#vMarca").value, ano:Number($("#vAno").value)||"", capacidade:Number($("#vCap").value)||"",
-    proprietarioId:$("#vProp").value, motoristaId:$("#vMot").value, telefone:$("#vTel").value,
-    documentacao:$("#vDoc").value, situacao:$("#vSit").value, escalaDias:dias,
-    ordemBase: editV?.ordemBase ?? VEIC.length};
-  await DB.put("veiculos",obj); closeModal("mVeic"); toast("Veículo salvo","go"); await load(); render();
+  const v = {
+    id: currentVeic?.id || DB.uid(),
+    prefixo: $("#vmPrefixo").value,
+    placa: $("#vmPlaca").value,
+    modelo: $("#vmModelo").value,
+    marca: $("#vmMarca").value,
+    ano: Number($("#vmAno").value),
+    capacidade: Number($("#vmCap").value),
+    proprietarioId: $("#vmProp").value,
+    motoristaId: $("#vmMot").value,
+    situacao: $("#vmSit").value,
+    documentacao: $("#vmDoc").value,
+    escalaDias: [...$$(".dia-check:checked")].map(c=>Number(c.value)),
+    ordemBase: currentVeic?.ordemBase || VEIC.length+1
+  };
+  await DB.put("veiculos", v);
+  toast("Veículo salvo","go");
+  $("#modalVeic").style.display="none";
+  await load(); paintAll();
 }
 
-let editP=null;
-function openPes(p){
-  editP=p||null; $("#pTit").textContent=p?"Editar pessoa":"Nova pessoa";
-  $("#pNome").value=p?.nome||""; $("#pTipo").value=p?.tipo||"Proprietário";
-  $("#pTel").value=p?.telefone||""; $("#pDoc").value=p?.doc||"";
-  openModal("mPes");
+async function delVeic(){
+  if(!currentVeic?.id) return;
+  if(!confirm("Excluir este veículo?")) return;
+  await DB.del("veiculos", currentVeic.id);
+  toast("Veículo excluído","go");
+  $("#modalVeic").style.display="none";
+  await load(); paintAll();
 }
+
+function openModalPes(id){
+  currentPes = id === "" ? null : PES.find(p=>p.id===id);
+  if(!currentPes) currentPes = {};
+  
+  $("#pmNome").value = currentPes.nome || "";
+  $("#pmTipo").value = currentPes.tipo || "Motorista";
+  $("#pmTel").value = currentPes.telefone || "";
+  $("#pmDoc").value = currentPes.doc || "";
+  $("#modalPes").style.display="block";
+}
+
 async function savePes(){
-  if(!$("#pNome").value) return toast("Informe o nome","stop");
-  await DB.put("pessoas",{...(editP||{}),nome:$("#pNome").value,tipo:$("#pTipo").value,
-    telefone:$("#pTel").value,doc:$("#pDoc").value});
-  closeModal("mPes"); toast("Pessoa salva","go"); await load(); render();
+  const p = {
+    id: currentPes?.id || DB.uid(),
+    nome: $("#pmNome").value,
+    tipo: $("#pmTipo").value,
+    telefone: $("#pmTel").value,
+    doc: $("#pmDoc").value,
+    situacao: "Ativo"
+  };
+  if(!p.nome) return toast("Nome é obrigatório","stop");
+  await DB.put("pessoas", p);
+  toast("Pessoa salva","go");
+  $("#modalPes").style.display="none";
+  await load(); paintAll();
+}
+
+async function delPes(){
+  if(!currentPes?.id) return;
+  if(!confirm("Excluir esta pessoa?")) return;
+  await DB.del("pessoas", currentPes.id);
+  toast("Pessoa excluída","go");
+  $("#modalPes").style.display="none";
+  await load(); paintAll();
+}
+
+function openModalRota(id){
+  currentRota = id === "" ? null : ROTAS.find(r=>r.id===id);
+  if(!currentRota) currentRota = { paradas:[] };
+  
+  $("#rmNome").value = currentRota.nome || "";
+  $("#rmOrig").value = currentRota.origem || "";
+  $("#rmDest").value = currentRota.destino || "";
+  paintParadas();
+  $("#modalRota").style.display="block";
+}
+
+function paintParadas(){
+  $("#rmParadas").innerHTML = (currentRota.paradas||[]).map((p,i)=>`<div class="parada-row">
+    <span style="text-align:center;font-weight:700">${i+1}</span>
+    <input type="text" value="${esc(p.nome)}" placeholder="Nome da parada" onchange="currentRota.paradas[${i}].nome=this.value">
+    <button class="btn ghost sm" onclick="currentRota.paradas.splice(${i},1);paintParadas()">×</button>
+  </div>`).join("");
+}
+
+function addParadaField(){
+  if(!currentRota.paradas) currentRota.paradas = [];
+  currentRota.paradas.push({ id:DB.uid(), nome:"Nova parada", ordem:currentRota.paradas.length+1 });
+  paintParadas();
+}
+
+async function saveRota(){
+  const r = {
+    id: currentRota?.id || DB.uid(),
+    nome: $("#rmNome").value,
+    origem: $("#rmOrig").value,
+    destino: $("#rmDest").value,
+    paradas: (currentRota.paradas||[]).map((p,i)=>({ ...p, ordem:i+1 }))
+  };
+  if(!r.nome) return toast("Nome da rota é obrigatório","stop");
+  if(!r.paradas.length) return toast("Adicione pelo menos uma parada","stop");
+  await DB.put("rotas", r);
+  toast("Rota salva","go");
+  $("#modalRota").style.display="none";
+  await load(); paintAll();
+}
+
+async function delRota(){
+  if(!currentRota?.id) return;
+  if(!confirm("Excluir esta rota?")) return;
+  await DB.del("rotas", currentRota.id);
+  toast("Rota excluída","go");
+  $("#modalRota").style.display="none";
+  await load(); paintAll();
+}
+
+async function saveCoop(){
+  const c = {
+    id: "coop",
+    nome: $("#coopNome").value,
+    cnpj: $("#coopCNPJ").value,
+    rota: $("#coopRota").value,
+    presidente: $("#coopPres").value,
+    caixa: COOP_DATA.caixa || 0
+  };
+  await DB.put("cooperativa", c);
+  toast("Cooperativa atualizada","go");
+  await load(); paintAll();
 }
 </script>
 </body>
