@@ -10,6 +10,12 @@ const money = n => (n<0?"-":"")+"R$ "+Math.abs(Number(n||0)).toLocaleString("pt-
 function getRole(){ return localStorage.getItem(COOP.COL+"role") || "Administrador"; }
 function setRole(r){ localStorage.setItem(COOP.COL+"role", r); }
 
+/* Session / Login */
+function setUser(user){ localStorage.setItem(COOP.COL+"user", JSON.stringify(user)); }
+function getUser(){ try{ return JSON.parse(localStorage.getItem(COOP.COL+"user"))||null; }catch(e){ return null; } }
+function logout(){ localStorage.removeItem(COOP.COL+"user"); location.href="login.html"; }
+function requireLogin(){ if(!getUser()) { location.href="login.html"; throw new Error("Not logged in"); } }
+
 const NAV = [
   ["index.html","Painel"],
   ["operacao.html","Operação"],
@@ -20,8 +26,12 @@ const NAV = [
 ];
 
 function renderTop(active){
+  const user = getUser();
   const opts = COOP.PERFIS.map(p=>`<option ${p===getRole()?"selected":""}>${p}</option>`).join("");
   const nav = NAV.map(([h,t])=>`<a href="${h}" class="${h===active?"active":""}">${t}</a>`).join("");
+  const rightSide = user 
+    ? `<span class="route-chip">${esc(user.nome)}</span><button class="btn sm" id="logoutBtn">Sair</button>`
+    : `<span class="route-chip">Intervalo ${COOP.INTERVALO_MIN}min · 1ª ${COOP.PRIMEIRA_SAIDA}</span><select class="rolepick" id="rolepick" title="Perfil ativo">${opts}</select>`;
   document.body.insertAdjacentHTML("afterbegin", `
     <div class="topbar">
       <div class="brand"><span class="dot"></span>
@@ -29,10 +39,10 @@ function renderTop(active){
       </div>
       <nav class="nav">${nav}</nav>
       <span class="spacer"></span>
-      <span class="route-chip">Intervalo ${COOP.INTERVALO_MIN}min · 1ª ${COOP.PRIMEIRA_SAIDA}</span>
-      <select class="rolepick" id="rolepick" title="Perfil ativo">${opts}</select>
+      ${rightSide}
     </div>`);
-  $("#rolepick").onchange = e => { setRole(e.target.value); toast("Perfil: "+e.target.value); };
+  if(user){ $("#logoutBtn").onclick = logout; }
+  else $("#rolepick").onchange = e => { setRole(e.target.value); toast("Perfil: "+e.target.value); };
 }
 
 /* toast */
