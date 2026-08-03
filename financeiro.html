@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Financeiro · Cooperativa</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <div><div class="eyebrow">Financeiro da cooperativa</div><h1>Caixa e prestação de contas</h1></div>
+    <button class="btn" id="btnNovo">+ Lançamento</button>
+  </div>
+
+  <div class="banner">Só entram aqui as contas da cooperativa (mensalidade, taxa, receitas e despesas administrativas).
+    O faturamento das viagens é de cada proprietário e não é controlado pelo sistema.</div>
+
+  <div class="grid g-3 mb" id="kpis"></div>
+
+  <div class="card">
+    <div class="card-h"><h3>Lançamentos</h3>
+      <div class="seg" id="filtro">
+        <button class="active" data-f="all">Todos</button>
+        <button data-f="in">Entradas</button>
+        <button data-f="out">Saídas</button>
+      </div>
+    </div>
+    <div class="card-b" id="lista"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="mFin"><div class="modal">
+  <div class="m-h"><h3>Novo lançamento</h3><button class="x" onclick="closeModal('mFin')">×</button></div>
+  <div class="m-b">
+    <div class="form-grid">
+      <div class="field"><label>Tipo</label><select id="fTipo">
+        <option>Mensalidade</option><option>Taxa</option><option>Receita</option><option>Despesa</option></select></div>
+      <div class="field"><label>Valor (R$)</label><input class="input" id="fValor" type="number" step="0.01" placeholder="0,00"></div>
+      <div class="field"><label>Data</label><input class="input" id="fData" type="date"></div>
+      <div class="field"><label>Descrição</label><input class="input" id="fDesc" placeholder="Ex.: mensalidade de julho"></div>
+    </div>
+    <div class="hint">Despesa entra como saída do caixa; os demais tipos entram como entrada.</div>
+  </div>
+  <div class="m-f"><button class="btn ghost" onclick="closeModal('mFin')">Cancelar</button>
+    <button class="btn" id="fSalvar">Salvar</button></div>
+</div></div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+let FIN=[], FILT="all";
+boot("financeiro.html", async ()=>{
+  $("#fData").value=T.today();
+  $("#btnNovo").onclick=()=>openModal("mFin");
+  $("#fSalvar").onclick=save;
+  $$("#filtro button").forEach(b=>b.onclick=()=>{
+    $$("#filtro button").forEach(x=>x.classList.remove("active")); b.classList.add("active");
+    FILT=b.dataset.f; render();
+  });
+  await load(); render();
+});
+async function load(){ FIN=await DB.all("financeiro"); }
+async function save(){
+  const v=Number($("#fValor").value); if(!v) return toast("Informe o valor","stop");
+  const tipo=$("#fTipo").value;
+  const valor = tipo==="Despesa" ? -Math.abs(v) : Math.abs(v);
+  await DB.put("financeiro",{tipo,valor,descricao:$("#fDesc").value||tipo,data:$("#fData").value});
+  $("#fValor").value=""; $("#fDesc").value=""; closeModal("mFin"); toast("Lançamento salvo","go");
+  await load(); render();
+}
+function render(){
+  const entradas=FIN.filter(f=>f.valor>0).reduce((s,f)=>s+f.valor,0);
+  const saidas=FIN.filter(f=>f.valor<0).reduce((s,f)=>s+f.valor,0);
+  const caixa=entradas+saidas;
+  const kpi=(k,v,cls)=>`<div class="card stat ${cls}"><div class="k">${k}</div><div class="v small">${money(v)}</div></div>`;
+  $("#kpis").innerHTML=kpi("Entradas",entradas,"")+kpi("Saídas",saidas,"")+kpi("Caixa atual",caixa,"accent");
+
+  let rows=[...FIN].sort((a,b)=>(b.data||"").localeCompare(a.data||""));
+  if(FILT==="in") rows=rows.filter(f=>f.valor>0);
+  if(FILT==="out") rows=rows.filter(f=>f.valor<0);
+  $("#lista").innerHTML = rows.length ? `<table class="table"><thead><tr>
+    <th>Data</th><th>Tipo</th><th>Descrição</th><th class="right">Valor</th><th></th></tr></thead><tbody>`+
+    rows.map(f=>`<tr><td class="num">${(f.data||"").split("-").reverse().join("/")}</td>
+      <td><span class="chip ${f.valor<0?"stop":"go"}"><i></i>${esc(f.tipo)}</span></td>
+      <td>${esc(f.descricao)}</td>
+      <td class="right num" style="color:${f.valor<0?"var(--stop)":"var(--go)"};font-weight:700">${money(f.valor)}</td>
+      <td class="right"><button class="btn ghost sm" data-d="${f.id}">Excluir</button></td></tr>`).join("")
+    +`</tbody></table>` : `<div class="table-empty">Nenhum lançamento.</div>`;
+  $$("#lista [data-d]").forEach(b=>b.onclick=async()=>{ await DB.del("financeiro",b.dataset.d); await load(); render(); toast("Removido"); });
+}
+</script>
+</body>
+</html>

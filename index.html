@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Painel · Cooperativa</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Painel em tempo real</div>
+      <h1 id="hoje"></h1>
+    </div>
+    <div class="btn-row">
+      <button class="btn ghost" id="btnGerar">Gerar fila do dia</button>
+      <a class="btn" href="operacao.html">Ir para operação →</a>
+    </div>
+  </div>
+
+  <div id="banner"></div>
+
+  <div class="grid g-4 mb" id="kpis"></div>
+
+  <div class="grid g-2">
+    <div class="board" id="board">
+      <div class="board-h"><span>Próximas saídas</span>
+        <span class="live"><i></i>ao vivo</span></div>
+      <div id="boardBody"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><h3>Situação da frota</h3><a href="cadastros.html">Ver cadastros →</a></div>
+      <div class="card-b" id="frota"></div>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+boot("index.html", async ()=>{
+  const d = new Date();
+  $("#hoje").textContent = d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"});
+
+  const date = T.today();
+  const [veic, pessoas, fin] = await Promise.all([DB.all("veiculos"),DB.all("pessoas"),DB.all("financeiro")]);
+  let fila = await FILA.get(date);
+
+  if(!fila.length){
+    $("#banner").innerHTML = `<div class="banner">⚠ A fila de hoje ainda não foi gerada.
+      Clique em <b>Gerar fila do dia</b> para montar a ordem de saída a partir das escalas.</div>`;
+  }
+
+  const ativos = veic.filter(v=>v.situacao==="Ativo").length;
+  const manut  = veic.filter(v=>v.situacao==="Manutenção").length;
+  const susp   = veic.filter(v=>v.situacao==="Suspenso").length;
+  const nowM = T.now();
+  const prox = fila.filter(f=>f.status==="aguardando").sort((a,b)=>a.ordem-b.ordem)[0];
+  const atrasos = fila.filter(f=>f.status==="aguardando" && T.toMin(f.previsto) < nowM - COOP.TOLERANCIA_MIN).length;
+  const caixa = fin.reduce((s,f)=>s+Number(f.valor||0),0);
+
+  const kpi=(k,v,sub,cls="")=>`<div class="card stat ${cls}"><div class="k">${k}</div>
+    <div class="v ${v.length>6?'small':''}">${v}</div><div class="sub">${sub||""}</div></div>`;
+  $("#kpis").innerHTML =
+    kpi("Em operação hoje", String(fila.length), ativos+" ativos na frota","accent")+
+    kpi("Próxima saída", prox?prox.previsto:"—", prox?("Prefixo "+nameVeic(prox.veiculoId)):"fila vazia")+
+    kpi("Atrasados", String(atrasos), "além da tolerância")+
+    kpi("Caixa da cooperativa", money(caixa), "receitas − despesas");
+
+  function nameVeic(id){ const v=veic.find(x=>x.id===id); return v?v.prefixo:"—"; }
+
+  // board preview (próximas 5)
+  const upcoming = fila.filter(f=>f.status!=="saiu").sort((a,b)=>a.ordem-b.ordem).slice(0,5);
+  $("#boardBody").innerHTML = upcoming.length ? upcoming.map((f,i)=>{
+    const v=veic.find(x=>x.id===f.veiculoId)||{};
+    const late = f.status==="aguardando" && T.toMin(f.previsto) < nowM - COOP.TOLERANCIA_MIN;
+    return `<div class="board-row ${i===0?'next':''}">
+      <span class="ord">${f.ordem}</span>
+      <div><div class="pfx">${esc(v.prefixo||"—")}</div>
+        <div class="who">${esc(v.modelo||"")} · ${esc(nameOf(pessoas,v.motoristaId))}</div></div>
+      <div class="time">${f.previsto}<small>PREVISTO</small></div>
+      <div class="time">${f.real||"—"}<small>REAL</small></div>
+      <div class="right">${late?'<span class="chip stop"><i></i>Atrasado</span>':'<span class="chip go"><i></i>No horário</span>'}</div>
+    </div>`;
+  }).join("") : `<div class="board-empty">Nenhuma saída programada. Gere a fila do dia.</div>`;
+
+  // frota
+  const linha=(lbl,n,cls)=>`<div class="list-row"><span>${sitChip(lbl)}</span>
+    <b class="num">${n}</b></div>`;
+  $("#frota").innerHTML = linha("Ativo",ativos)+linha("Manutenção",manut)+linha("Suspenso",susp)+
+    linha("Inativo",veic.filter(v=>v.situacao==="Inativo").length);
+
+  $("#btnGerar").onclick = async ()=>{
+    await FILA.build(date);
+    toast("Fila do dia gerada","go");
+    setTimeout(()=>location.reload(),500);
+  };
+});
+</script>
+</body>
+</html>

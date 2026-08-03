@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Cadastros · Cooperativa</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <div><div class="eyebrow">Cadastros</div><h1>Frota, pessoas e cooperativa</h1></div>
+    <button class="btn" id="btnNovo">+ Novo</button>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-tab="veiculos" class="active">Veículos</button>
+    <button data-tab="pessoas">Pessoas</button>
+    <button data-tab="cooperativa">Cooperativa</button>
+  </div>
+
+  <div class="card"><div class="card-b" id="panel"></div></div>
+</div>
+
+<!-- Modal veículo -->
+<div class="modal-bg" id="mVeic"><div class="modal">
+  <div class="m-h"><h3 id="vTit">Veículo</h3><button class="x" onclick="closeModal('mVeic')">×</button></div>
+  <div class="m-b">
+    <div class="form-grid">
+      <div class="field"><label>Prefixo</label><input class="input" id="vPref"></div>
+      <div class="field"><label>Placa</label><input class="input" id="vPlaca"></div>
+      <div class="field"><label>Modelo</label><input class="input" id="vModelo"></div>
+      <div class="field"><label>Marca</label><input class="input" id="vMarca"></div>
+      <div class="field"><label>Ano</label><input class="input" id="vAno" type="number"></div>
+      <div class="field"><label>Capacidade</label><input class="input" id="vCap" type="number"></div>
+      <div class="field"><label>Proprietário</label><select id="vProp"></select></div>
+      <div class="field"><label>Motorista principal</label><select id="vMot"></select></div>
+      <div class="field"><label>Telefone</label><input class="input" id="vTel"></div>
+      <div class="field"><label>Situação</label><select id="vSit"></select></div>
+    </div>
+    <div class="field"><label>Escala (dias de operação)</label><div id="vDias" class="btn-row"></div></div>
+    <div class="field"><label>Documentação</label><input class="input" id="vDoc" placeholder="OK / Vencida / observação"></div>
+  </div>
+  <div class="m-f"><button class="btn ghost" onclick="closeModal('mVeic')">Cancelar</button>
+    <button class="btn" id="vSalvar">Salvar veículo</button></div>
+</div></div>
+
+<!-- Modal pessoa -->
+<div class="modal-bg" id="mPes"><div class="modal">
+  <div class="m-h"><h3 id="pTit">Pessoa</h3><button class="x" onclick="closeModal('mPes')">×</button></div>
+  <div class="m-b"><div class="form-grid">
+    <div class="field"><label>Nome</label><input class="input" id="pNome"></div>
+    <div class="field"><label>Tipo</label><select id="pTipo"></select></div>
+    <div class="field"><label>Telefone</label><input class="input" id="pTel"></div>
+    <div class="field"><label>Documento</label><input class="input" id="pDoc"></div>
+  </div></div>
+  <div class="m-f"><button class="btn ghost" onclick="closeModal('mPes')">Cancelar</button>
+    <button class="btn" id="pSalvar">Salvar pessoa</button></div>
+</div></div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+let TAB="veiculos", VEIC=[], PES=[], COOPR={};
+
+boot("cadastros.html", async ()=>{
+  fillSel($("#vSit"), COOP.SITUACOES);
+  fillSel($("#pTipo"), COOP.TIPOS_PESSOA);
+  $("#vDias").innerHTML = COOP.DIAS.map((d,i)=>`<button type="button" class="btn ghost sm dia" data-d="${i}">${d}</button>`).join("");
+  $$("#vDias .dia").forEach(b=>b.onclick=()=>b.classList.toggle("amber"));
+
+  $$("#tabs button").forEach(b=>b.onclick=()=>{
+    $$("#tabs button").forEach(x=>x.classList.remove("active")); b.classList.add("active");
+    TAB=b.dataset.tab; render();
+  });
+  $("#btnNovo").onclick=()=> TAB==="veiculos"?openVeic():TAB==="pessoas"?openPes():toast("Edite a cooperativa abaixo");
+  $("#vSalvar").onclick=saveVeic;
+  $("#pSalvar").onclick=savePes;
+
+  await load(); render();
+});
+
+function fillSel(sel,arr){ sel.innerHTML=arr.map(x=>`<option>${x}</option>`).join(""); }
+async function load(){
+  [VEIC,PES]=await Promise.all([DB.all("veiculos"),DB.all("pessoas")]);
+  COOPR=(await DB.get("cooperativa","coop"))||{id:"coop"};
+}
+function propSel(){ return PES.filter(p=>p.tipo==="Proprietário"); }
+function motSel(){ return PES.filter(p=>p.tipo==="Motorista"); }
+function peopleOpts(list,val){ return `<option value="">—</option>`+list.map(p=>`<option value="${p.id}" ${p.id===val?"selected":""}>${esc(p.nome)}</option>`).join(""); }
+
+function render(){
+  if(TAB==="veiculos") return renderVeic();
+  if(TAB==="pessoas")  return renderPes();
+  return renderCoop();
+}
+
+function renderVeic(){
+  $("#btnNovo").style.display="";
+  $("#panel").innerHTML = VEIC.length ? `<table class="table"><thead><tr>
+    <th>Prefixo</th><th>Placa</th><th>Modelo</th><th>Cap.</th><th>Proprietário</th>
+    <th>Motorista</th><th>Escala</th><th>Situação</th><th></th></tr></thead><tbody>`+
+    VEIC.map(v=>`<tr>
+      <td><b>${esc(v.prefixo)}</b></td><td class="num">${esc(v.placa)}</td><td>${esc(v.modelo)}</td>
+      <td class="num">${v.capacidade}</td><td>${esc(nameOf(PES,v.proprietarioId))}</td>
+      <td>${esc(nameOf(PES,v.motoristaId))}</td><td class="muted" style="font-size:12px">${diasLabel(v.escalaDias)}</td>
+      <td>${sitChip(v.situacao)}</td>
+      <td class="right"><button class="btn ghost sm" data-e="${v.id}">Editar</button></td></tr>`).join("")
+    +`</tbody></table>`
+    : `<div class="table-empty">Nenhum veículo. Clique em “+ Novo”.</div>`;
+  $$("#panel [data-e]").forEach(b=>b.onclick=()=>openVeic(VEIC.find(v=>v.id===b.dataset.e)));
+}
+
+function renderPes(){
+  $("#btnNovo").style.display="";
+  $("#panel").innerHTML = PES.length ? `<table class="table"><thead><tr>
+    <th>Nome</th><th>Tipo</th><th>Telefone</th><th></th></tr></thead><tbody>`+
+    PES.map(p=>`<tr><td><b>${esc(p.nome)}</b></td><td><span class="chip brand"><i></i>${esc(p.tipo)}</span></td>
+      <td class="num">${esc(p.telefone||"—")}</td>
+      <td class="right"><button class="btn ghost sm" data-e="${p.id}">Editar</button></td></tr>`).join("")
+    +`</tbody></table>` : `<div class="table-empty">Nenhuma pessoa cadastrada.</div>`;
+  $$("#panel [data-e]").forEach(b=>b.onclick=()=>openPes(PES.find(p=>p.id===b.dataset.e)));
+}
+
+function renderCoop(){
+  $("#btnNovo").style.display="none";
+  $("#panel").innerHTML=`
+    <div class="form-grid">
+      <div class="field"><label>Nome da cooperativa</label><input class="input" id="cNome" value="${esc(COOPR.nome||COOP.COOPERATIVA)}"></div>
+      <div class="field"><label>CNPJ</label><input class="input" id="cCnpj" value="${esc(COOPR.cnpj||"")}"></div>
+      <div class="field"><label>Presidente</label><input class="input" id="cPres" value="${esc(COOPR.presidente||"")}"></div>
+      <div class="field"><label>Rota</label><input class="input" id="cRota" value="${esc(COOPR.rota||COOP.ROTA)}"></div>
+    </div>
+    <button class="btn mt" id="cSalvar">Salvar cooperativa</button>`;
+  $("#cSalvar").onclick=async()=>{
+    await DB.put("cooperativa",{id:"coop",nome:$("#cNome").value,cnpj:$("#cCnpj").value,
+      presidente:$("#cPres").value,rota:$("#cRota").value,caixa:COOPR.caixa||0});
+    toast("Cooperativa salva","go"); await load();
+  };
+}
+
+let editV=null;
+function openVeic(v){
+  editV=v||null;
+  $("#vTit").textContent=v?"Editar veículo":"Novo veículo";
+  $("#vProp").innerHTML=peopleOpts(propSel(), v?.proprietarioId);
+  $("#vMot").innerHTML=peopleOpts(motSel(), v?.motoristaId);
+  $("#vPref").value=v?.prefixo||""; $("#vPlaca").value=v?.placa||""; $("#vModelo").value=v?.modelo||"";
+  $("#vMarca").value=v?.marca||""; $("#vAno").value=v?.ano||""; $("#vCap").value=v?.capacidade||"";
+  $("#vTel").value=v?.telefone||""; $("#vDoc").value=v?.documentacao||"OK"; $("#vSit").value=v?.situacao||"Ativo";
+  const dias=new Set(v?.escalaDias||[]);
+  $$("#vDias .dia").forEach(b=>b.classList.toggle("amber", dias.has(Number(b.dataset.d))));
+  openModal("mVeic");
+}
+async function saveVeic(){
+  if(!$("#vPref").value) return toast("Informe o prefixo","stop");
+  const dias=$$("#vDias .dia").filter(b=>b.classList.contains("amber")).map(b=>Number(b.dataset.d));
+  const obj={...(editV||{}), prefixo:$("#vPref").value, placa:$("#vPlaca").value, modelo:$("#vModelo").value,
+    marca:$("#vMarca").value, ano:Number($("#vAno").value)||"", capacidade:Number($("#vCap").value)||"",
+    proprietarioId:$("#vProp").value, motoristaId:$("#vMot").value, telefone:$("#vTel").value,
+    documentacao:$("#vDoc").value, situacao:$("#vSit").value, escalaDias:dias,
+    ordemBase: editV?.ordemBase ?? VEIC.length};
+  await DB.put("veiculos",obj); closeModal("mVeic"); toast("Veículo salvo","go"); await load(); render();
+}
+
+let editP=null;
+function openPes(p){
+  editP=p||null; $("#pTit").textContent=p?"Editar pessoa":"Nova pessoa";
+  $("#pNome").value=p?.nome||""; $("#pTipo").value=p?.tipo||"Proprietário";
+  $("#pTel").value=p?.telefone||""; $("#pDoc").value=p?.doc||"";
+  openModal("mPes");
+}
+async function savePes(){
+  if(!$("#pNome").value) return toast("Informe o nome","stop");
+  await DB.put("pessoas",{...(editP||{}),nome:$("#pNome").value,tipo:$("#pTipo").value,
+    telefone:$("#pTel").value,doc:$("#pDoc").value});
+  closeModal("mPes"); toast("Pessoa salva","go"); await load(); render();
+}
+</script>
+</body>
+</html>

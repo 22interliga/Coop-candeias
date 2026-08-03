@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Operação · Cooperativa</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Controle de saída · fila em tempo real</div>
+      <h1>Operação do dia</h1>
+    </div>
+    <div class="btn-row">
+      <input type="date" id="date" class="input" style="width:auto">
+      <button class="btn ghost" id="btnGerar">Gerar / Regerar fila</button>
+    </div>
+  </div>
+
+  <div id="banner"></div>
+
+  <div class="grid" style="grid-template-columns:1.7fr 1fr;gap:16px" id="cols">
+    <div class="board">
+      <div class="board-h">
+        <span>Painel de partidas — <span id="rota"></span></span>
+        <span class="live"><i></i>ao vivo</span>
+      </div>
+      <div id="board"></div>
+    </div>
+
+    <div class="grid" style="gap:16px">
+      <div class="card">
+        <div class="card-h"><h3>Banco de reservas</h3><span class="chip mut" id="resCount"><i></i>0</span></div>
+        <div class="card-b" id="reservas"></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Ocorrência rápida</h3></div>
+        <div class="card-b">
+          <div class="field"><label>Veículo</label><select id="ocVeic"></select></div>
+          <div class="form-grid">
+            <div class="field"><label>Tipo</label><select id="ocTipo"></select></div>
+            <div class="field"><label>Data</label><input type="date" id="ocData" class="input"></div>
+          </div>
+          <div class="field"><label>Observação</label><input class="input" id="ocObs" placeholder="Descreva a ocorrência"></div>
+          <button class="btn ghost sm" id="ocSalvar">Registrar ocorrência</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt">
+    <div class="card-h"><h3>Substituições e penalidades de hoje</h3></div>
+    <div class="card-b" id="hist"></div>
+  </div>
+</div>
+
+<!-- Modal penalidade -->
+<div class="modal-bg" id="mPen">
+  <div class="modal">
+    <div class="m-h"><h3>Aplicar penalidade</h3><button class="x" onclick="closeModal('mPen')">×</button></div>
+    <div class="m-b">
+      <div class="field"><label>Veículo</label><div id="penVeic" class="input" style="background:#f7f8fa"></div></div>
+      <div class="form-grid">
+        <div class="field"><label>Perder posições</label>
+          <select id="penPos"><option>1</option><option>3</option><option>5</option><option>10</option></select></div>
+        <div class="field"><label>Supervisor</label><select id="penSup"></select></div>
+      </div>
+      <div class="field"><label>Motivo</label><input class="input" id="penMot" placeholder="Ex.: perdeu a vez / ultrapassou o horário"></div>
+      <div class="hint">A fila será reorganizada automaticamente e os horários recalculados.</div>
+    </div>
+    <div class="m-f"><button class="btn ghost" onclick="closeModal('mPen')">Cancelar</button>
+      <button class="btn danger" id="penOk">Aplicar penalidade</button></div>
+  </div>
+</div>
+
+<!-- Modal substituição -->
+<div class="modal-bg" id="mSub">
+  <div class="modal">
+    <div class="m-h"><h3>Substituir veículo</h3><button class="x" onclick="closeModal('mSub')">×</button></div>
+    <div class="m-b">
+      <div class="field"><label>Sai da fila</label><div id="subSai" class="input" style="background:#f7f8fa"></div></div>
+      <div class="form-grid">
+        <div class="field"><label>Entra (reserva)</label><select id="subEntra"></select></div>
+        <div class="field"><label>Motivo</label><select id="subMot"></select></div>
+      </div>
+      <div class="field"><label>Supervisor que autoriza</label><select id="subSup"></select></div>
+      <div class="hint">O substituto assume a mesma posição na fila. Histórico fica salvo.</div>
+    </div>
+    <div class="m-f"><button class="btn ghost" onclick="closeModal('mSub')">Cancelar</button>
+      <button class="btn" id="subOk">Confirmar substituição</button></div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+let VEIC=[], PES=[], DATE=T.today(), CTX={};
+
+boot("operacao.html", async ()=>{
+  $("#rota").textContent = COOP.ROTA;
+  $("#date").value = DATE;
+  $("#ocData").value = DATE;
+  $("#date").onchange = e => { DATE=e.target.value; refresh(); };
+  $("#btnGerar").onclick = async ()=>{
+    await FILA.build(DATE); toast("Fila gerada","go"); refresh();
+  };
+
+  const sups = ()=>PES.filter(p=>p.tipo==="Supervisor");
+  fillSel($("#ocTipo"), COOP.OCORRENCIAS);
+  fillSel($("#subMot"), COOP.MOTIVOS_SUB);
+
+  $("#ocSalvar").onclick = async ()=>{
+    if(!$("#ocVeic").value) return toast("Selecione o veículo","stop");
+    await DB.put("ocorrencias",{veiculoId:$("#ocVeic").value, tipo:$("#ocTipo").value,
+      obs:$("#ocObs").value, data:$("#ocData").value});
+    $("#ocObs").value=""; toast("Ocorrência registrada","go");
+  };
+
+  $("#penOk").onclick = async ()=>{
+    const {veiculoId}=CTX;
+    await FILA.aplicarPenalidade(DATE, veiculoId, $("#penPos").value);
+    await DB.put("penalidades",{data:DATE, veiculoId, posicoes:Number($("#penPos").value),
+      motivo:$("#penMot").value, supervisorId:$("#penSup").value, ts:Date.now()});
+    CTX.moved=veiculoId; closeModal("mPen"); toast("Penalidade aplicada · fila reorganizada","stop"); refresh();
+  };
+
+  $("#subOk").onclick = async ()=>{
+    const {slotId, veiculoId}=CTX;
+    const novo=$("#subEntra").value;
+    if(!novo) return toast("Escolha um reserva","stop");
+    const fila = await FILA.get(DATE);
+    const row = fila.find(f=>f.id===slotId); if(row){ row.veiculoId=novo; await FILA.saveRow(DATE,row); }
+    await DB.put("substituicoes",{data:DATE, saiuId:veiculoId, entrouId:novo,
+      motivo:$("#subMot").value, supervisorId:$("#subSup").value, ts:Date.now()});
+    closeModal("mSub"); toast("Substituição confirmada","go"); refresh();
+  };
+
+  await refresh();
+  setInterval(paintBoard, 30000); // atualiza status a cada 30s
+});
+
+function fillSel(sel, arr, val){ sel.innerHTML = arr.map(x=>`<option ${x===val?"selected":""}>${x}</option>`).join(""); }
+function fillPeople(sel, list){ sel.innerHTML = `<option value="">—</option>`+list.map(p=>`<option value="${p.id}">${esc(p.nome)}</option>`).join(""); }
+function vById(id){ return VEIC.find(v=>v.id===id)||{}; }
+
+async function refresh(){
+  [VEIC,PES] = await Promise.all([DB.all("veiculos"),DB.all("pessoas")]);
+  fillPeople($("#penSup"), PES.filter(p=>p.tipo==="Supervisor"));
+  fillPeople($("#subSup"), PES.filter(p=>p.tipo==="Supervisor"));
+  $("#ocVeic").innerHTML = `<option value="">—</option>`+VEIC.map(v=>`<option value="${v.id}">${v.prefixo} · ${esc(v.modelo)}</option>`).join("");
+  await paintBoard();
+  await paintReservas();
+  await paintHist();
+}
+
+async function paintBoard(){
+  const fila = (await FILA.get(DATE)).sort((a,b)=>a.ordem-b.ordem);
+  const nowM=T.now();
+  if(!fila.length){
+    $("#banner").innerHTML=`<div class="banner">⚠ Sem fila para ${DATE}. Clique em <b>Gerar / Regerar fila</b>.</div>`;
+    $("#board").innerHTML=`<div class="board-empty">Nenhuma saída programada.</div>`; return;
+  }
+  $("#banner").innerHTML="";
+  const firstWaiting = fila.find(f=>f.status==="aguardando");
+  $("#board").innerHTML = fila.map(f=>{
+    const v=vById(f.veiculoId);
+    const late = f.status==="aguardando" && T.toMin(f.previsto) < nowM - COOP.TOLERANCIA_MIN;
+    const isNext = firstWaiting && f.id===firstWaiting.id;
+    let statusHtml = f.status==="saiu" ? '<span class="chip brand"><i></i>Saiu</span>'
+      : late ? '<span class="chip stop"><i></i>Atrasado</span>'
+      : '<span class="chip go"><i></i>No horário</span>';
+    const moved = CTX.moved===f.veiculoId ? "moved":"";
+    return `<div class="board-row ${isNext?'next':''} ${moved}">
+      <span class="ord">${f.ordem}</span>
+      <div><div class="pfx">${esc(v.prefixo||"?")}</div>
+        <div class="who">${esc(v.modelo||"")} · ${esc(nameOf(PES,v.motoristaId))}</div></div>
+      <div class="time">${f.previsto}<small>PREVISTO</small></div>
+      <div class="time">${f.real||"—"}<small>REAL</small></div>
+      <div class="right" style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+        ${statusHtml}
+        <div class="btn-row">
+          ${f.status!=="saiu"?`<button class="btn sm amber" data-saida="${f.id}">Saída</button>`:""}
+          <button class="btn sm ghost" data-pen="${f.veiculoId}">Penal.</button>
+          <button class="btn sm ghost" data-sub="${f.id}|${f.veiculoId}">Subst.</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+  CTX.moved=null;
+
+  $$("#board [data-saida]").forEach(b=>b.onclick=async()=>{
+    const fila=await FILA.get(DATE); const row=fila.find(f=>f.id===b.dataset.saida);
+    row.real=T.toHHMM(T.now()); row.status="saiu"; await FILA.saveRow(DATE,row);
+    toast("Saída registrada "+row.real,"go"); paintBoard();
+  });
+  $$("#board [data-pen]").forEach(b=>b.onclick=()=>{
+    const v=vById(b.dataset.pen); CTX={veiculoId:b.dataset.pen};
+    $("#penVeic").textContent=`${v.prefixo} · ${v.modelo}`; $("#penMot").value="";
+    openModal("mPen");
+  });
+  $$("#board [data-sub]").forEach(b=>b.onclick=async()=>{
+    const [slotId,veiculoId]=b.dataset.sub.split("|"); const v=vById(veiculoId);
+    CTX={slotId,veiculoId}; $("#subSai").textContent=`${v.prefixo} · ${v.modelo}`;
+    const pool=await reservaPool(); 
+    $("#subEntra").innerHTML=`<option value="">—</option>`+pool.map(r=>`<option value="${r.id}">${r.prefixo} · ${esc(r.modelo)}</option>`).join("");
+    openModal("mSub");
+  });
+}
+
+async function reservaPool(){
+  const fila=await FILA.get(DATE); const inFila=new Set(fila.map(f=>f.veiculoId));
+  return VEIC.filter(v=>v.situacao==="Ativo" && (v.documentacao||"").toUpperCase()!=="VENCIDA" && !inFila.has(v.id));
+}
+
+async function paintReservas(){
+  const pool=await reservaPool();
+  $("#resCount").innerHTML=`<i></i>${pool.length}`;
+  $("#reservas").innerHTML = pool.length ? pool.map(v=>`
+    <div class="list-row"><div><b>${esc(v.prefixo)}</b> · ${esc(v.modelo)}
+      <div class="who muted" style="font-size:12px">${esc(nameOf(PES,v.motoristaId))} · cap. ${v.capacidade}</div></div>
+      ${sitChip(v.situacao)}</div>`).join("")
+    : `<div class="table-empty">Sem veículos reserva disponíveis.</div>`;
+}
+
+async function paintHist(){
+  const [subs,pen]=await Promise.all([DB.all("substituicoes"),DB.all("penalidades")]);
+  const rows=[
+    ...subs.filter(s=>s.data===DATE).map(s=>({t:s.ts,tipo:"Substituição",
+      txt:`${vById(s.saiuId).prefixo||"?"} → ${vById(s.entrouId).prefixo||"?"} · ${s.motivo}`,
+      by:nameOf(PES,s.supervisorId),cls:"brand"})),
+    ...pen.filter(p=>p.data===DATE).map(p=>({t:p.ts,tipo:"Penalidade",
+      txt:`${vById(p.veiculoId).prefixo||"?"} desceu ${p.posicoes} posições · ${p.motivo}`,
+      by:nameOf(PES,p.supervisorId),cls:"stop"})),
+  ].sort((a,b)=>b.t-a.t);
+  $("#hist").innerHTML = rows.length ? `<table class="table"><thead><tr>
+    <th>Hora</th><th>Tipo</th><th>Detalhe</th><th>Supervisor</th></tr></thead><tbody>`+
+    rows.map(r=>`<tr><td class="num">${new Date(r.t).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</td>
+      <td><span class="chip ${r.cls}"><i></i>${r.tipo}</span></td><td>${esc(r.txt)}</td><td>${esc(r.by)}</td></tr>`).join("")
+    +`</tbody></table>`
+    : `<div class="table-empty">Nenhuma substituição ou penalidade hoje.</div>`;
+}
+</script>
+<style>@media(max-width:820px){#cols{grid-template-columns:1fr!important}
+.board-row{grid-template-columns:38px 1fr auto;row-gap:6px}
+.board-row .time{grid-column:span 1}}</style>
+</body>
+</html>
