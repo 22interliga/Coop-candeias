@@ -13,6 +13,7 @@ function setRole(r){ localStorage.setItem(COOP.COL+"role", r); }
 const NAV = [
   ["index.html","Painel"],
   ["operacao.html","Operação"],
+  ["fiscal.html","Fiscal"],
   ["cadastros.html","Cadastros"],
   ["financeiro.html","Financeiro"],
 ];
