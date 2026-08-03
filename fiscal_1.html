@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Fiscal · Cooperativa</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .fila-visual{ display:grid; grid-template-columns:60px 1fr 80px; gap:12px; align-items:center; padding:12px; border:1px solid var(--hair); border-radius:8px; margin-bottom:8px; cursor:pointer; transition:.2s }
+  .fila-visual:hover{ background:#f7f8fa; border-color:#2a3f86 }
+  .fila-visual.processing{ opacity:.6; pointer-events:none }
+  .fila-num{ font-size:20px; font-weight:800; color:#2a3f86; text-align:center }
+  .fila-info h4{ margin:0 0 4px 0; font-size:14px; font-weight:700 }
+  .fila-info p{ margin:0; font-size:12px; color:#6b7683 }
+  .btn-group{ display:flex; gap:6px }
+  .btn-group button{ flex:1; padding:8px 10px; font-size:12px }
+  .camera-preview{ max-width:200px; border-radius:8px; margin:8px 0 }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <div><div class="eyebrow">Acompanhamento</div><h1>Fiscalização</h1></div>
+    <div><input type="date" id="date" class="input" style="width:auto"></div>
+  </div>
+
+  <div class="seg">
+    <button class="active" data-tab="fila">Fila do dia</button>
+    <button data-tab="historico">Histórico <i id="histN" style="margin-left:6px;font-weight:700"></i></button>
+  </div>
+
+  <!-- TAB: FILA -->
+  <div id="fila" class="tab active">
+    <div class="card">
+      <div class="card-h"><h3>Linha de saída</h3></div>
+      <div class="card-b" id="filaList"></div>
+    </div>
+  </div>
+
+  <!-- TAB: HISTÓRICO -->
+  <div id="historico" class="tab" style="display:none">
+    <div class="card">
+      <div class="card-h"><h3>Registros do dia</h3></div>
+      <div class="card-b" id="histList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Registrar parada -->
+<div id="modalParada" class="modal" style="display:none">
+  <div class="modal-content" style="max-height:90vh;overflow-y:auto">
+    <button class="modal-close" id="closeModalParada">×</button>
+    <h2 id="modalTitulo">Registrar</h2>
+    
+    <div id="veicInfo" style="background:#f7f8fa;padding:12px;border-radius:8px;margin-bottom:16px">
+      <div style="font-size:12px;color:#6b7683;margin-bottom:4px">VEÍCULO</div>
+      <div style="font-size:16px;font-weight:800" id="veicNome"></div>
+      <div style="font-size:12px;color:#6b7683;margin-top:4px" id="veicMotor"></div>
+    </div>
+
+    <div id="paradaInfo"></div>
+
+    <div style="margin-bottom:16px">
+      <label class="lbl">Hora</label>
+      <input type="time" id="mHora" class="input">
+    </div>
+
+    <div style="margin-bottom:16px">
+      <label class="lbl">Observação</label>
+      <input type="text" id="mObs" class="input" placeholder="Opcional">
+    </div>
+
+    <div style="margin-bottom:16px">
+      <label class="lbl">Foto</label>
+      <input type="file" id="mFoto" class="input" accept="image/*" capture="environment">
+      <img id="mFotoPreview" class="camera-preview" style="display:none">
+    </div>
+
+    <div style="margin-bottom:16px">
+      <label class="chk">
+        <input type="checkbox" id="mIrregular">
+        <span>Registrar irregularidade</span>
+      </label>
+      <div id="mIrregularOpt" style="display:none;margin-top:8px">
+        <select id="mIrregTipo" class="input" style="font-size:13px">
+          <option value="">Tipo de irregularidade</option>
+          <option value="Excesso de passageiros">Excesso de passageiros</option>
+          <option value="Documentação vencida">Documentação vencida</option>
+          <option value="Limpeza do veículo">Limpeza do veículo</option>
+          <option value="Falta de extintor">Falta de extintor</option>
+          <option value="Pane no veículo">Pane no veículo</option>
+          <option value="Atraso significativo">Atraso significativo</option>
+          <option value="Comportamento do motorista">Comportamento do motorista</option>
+          <option value="Outra">Outra</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <button class="btn" id="saveParadaBtn">Registrar</button>
+      <button class="btn ghost" id="cancelParadaBtn">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+let DATE=T.today(), VEIC=[], PES=[], ROTA=null, FILA=[];
+let mFotoData=null, currentVeicId="", currentParada=null, currentParadaIdx=0;
+
+boot("fiscal.html", async ()=>{
+  requireLogin();
+  const user = getUser();
+  if(user.tipo !== "Fiscal") { toast("Acesso apenas para fiscais","stop"); logout(); return; }
+
+  $("#date").value = DATE;
+  $("#date").onchange = e => { DATE = e.target.value; refresh(); };
+
+  // Tabs
+  $$(".seg button").forEach(b => b.onclick = ()=>{
+    $$(".seg button").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    $$(".tab").forEach(t => t.style.display="none");
+    document.getElementById(b.dataset.tab).style.display="block";
+    if(b.dataset.tab === "historico") paintHist();
+  });
+
+  // Modal
+  $("#closeModalParada").onclick = closeModal;
+  $("#cancelParadaBtn").onclick = closeModal;
+  $("#saveParadaBtn").onclick = saveParada;
+
+  $("#mIrregular").onchange = e => {
+    $("#mIrregularOpt").style.display = e.target.checked ? "block" : "none";
+  };
+
+  $("#mFoto").onchange = e => {
+    const f = e.target.files[0];
+    if(!f) { mFotoData=null; $("#mFotoPreview").style.display="none"; return; }
+    const r = new FileReader();
+    r.onload = async ev => {
+      let img = new Image();
+      img.onload = () => {
+        const c = document.createElement("canvas");
+        const ctx = c.getContext("2d");
+        const maxW=720, maxH=720;
+        let w=img.width, h=img.height;
+        if(w>maxW){ h=Math.round(h*maxW/w); w=maxW; }
+        if(h>maxH){ w=Math.round(w*maxH/h); h=maxH; }
+        c.width=w; c.height=h;
+        ctx.drawImage(img,0,0,w,h);
+        mFotoData = c.toDataURL("image/jpeg",0.8);
+        $("#mFotoPreview").src = mFotoData;
+        $("#mFotoPreview").style.display = "block";
+      };
+      img.src = ev.target.result;
+    };
+    r.readAsDataURL(f);
+  };
+
+  await load();
+  refresh();
+});
+
+async function load(){
+  [VEIC, PES, ROTA, FILA] = await Promise.all([
+    DB.all("veiculos"),
+    DB.all("pessoas"),
+    DB.get("rotas", COOP.ROTA_PADRAO),
+    FILA.get(DATE)
+  ]);
+}
+
+async function refresh(){
+  await load();
+  const nowM = T.now();
+
+  if(!FILA.length){
+    $("#filaList").innerHTML = `<div class="table-empty">Sem fila para ${DATE}.</div>`;
+    return;
+  }
+
+  let html = "";
+  FILA.forEach((f, idx) => {
+    const v = VEIC.find(x=>x.id===f.veiculoId)||{};
+    const mot = nameOf(PES, v.motoristaId);
+    const primeiraParada = f.paradas?.[0];
+    
+    let statusChip = `<span class="chip go"><i></i>Aguardando</span>`;
+    if(primeiraParada?.real) statusChip = `<span class="chip brand"><i></i>Saiu</span>`;
+    else if(primeiraParada && T.toMin(primeiraParada.previsto) < nowM - COOP.TOLERANCIA_MIN){
+      statusChip = `<span class="chip stop"><i></i>Atrasado</span>`;
+    }
+
+    html += `<div class="fila-visual" onclick="openParadaModal('${f.veiculoId}', 0, 'Registrar saída')">
+      <div class="fila-num">#${f.filaPosicao}</div>
+      <div class="fila-info">
+        <h4>${esc(v.prefixo)} · ${esc(v.modelo)}</h4>
+        <p>${esc(mot)} · ${primeiraParada?.previsto || "—"}</p>
+      </div>
+      <div>${statusChip}</div>
+    </div>`;
+  });
+
+  $("#filaList").innerHTML = html;
+}
+
+function openParadaModal(veicId, paradaIdx, titulo){
+  currentVeicId = veicId;
+  currentParadaIdx = paradaIdx;
+  currentParada = null;
+
+  const filaRow = FILA.find(f => f.veiculoId === veicId);
+  if(!filaRow) return toast("Veículo não encontrado na fila","stop");
+
+  currentParada = filaRow.paradas[paradaIdx];
+  if(!currentParada) return toast("Parada não encontrada","stop");
+
+  const v = VEIC.find(x=>x.id===veicId)||{};
+  const mot = nameOf(PES, v.motoristaId);
+
+  $("#modalTitulo").textContent = titulo;
+  $("#veicNome").textContent = `${esc(v.prefixo)} · ${esc(v.modelo)}`;
+  $("#veicMotor").textContent = `Motorista: ${esc(mot)}`;
+
+  const paradaLabel = currentParada.ordem === 1 ? "🚗 SAÍDA" 
+    : currentParada.ordem === (filaRow.paradas||[]).length ? "🏁 DESTINO"
+    : "🛑 PARADA " + currentParada.ordem;
+  
+  $("#paradaInfo").innerHTML = `
+    <div style="background:#f7f8fa;padding:12px;border-radius:8px;margin-bottom:16px">
+      <div style="font-size:12px;color:#6b7683;margin-bottom:4px">${paradaLabel}</div>
+      <div style="font-size:16px;font-weight:800">${esc(currentParada.nome)}</div>
+      <div style="font-size:12px;color:#6b7683;margin-top:4px">Previsto: <b>${currentParada.previsto}</b></div>
+    </div>`;
+
+  const now = new Date();
+  $("#mHora").value = String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+  $("#mObs").value = "";
+  $("#mFoto").value = "";
+  $("#mFotoPreview").style.display = "none";
+  mFotoData = null;
+  $("#mIrregular").checked = false;
+  $("#mIrregularOpt").style.display = "none";
+
+  $("#modalParada").style.display = "block";
+}
+
+function closeModal(){
+  $("#modalParada").style.display = "none";
+  currentVeicId = "";
+  currentParada = null;
+}
+
+async function saveParada(){
+  const hora = $("#mHora").value;
+  if(!hora) return toast("Defina a hora","stop");
+
+  const v = VEIC.find(x=>x.id===currentVeicId);
+  const user = getUser();
+
+  // Detecta atraso (não é na saída, só nas paradas intermediárias e destino)
+  const eAtraso = currentParada.ordem > 1 && T.toMin(hora) > T.toMin(currentParada.previsto) + COOP.TOLERANCIA_MIN;
+
+  // Registra a fiscalização
+  const reg = {
+    id: DB.uid(),
+    data: DATE,
+    tipo: currentParada.ordem === 1 ? "saida" : currentParada.ordem === (FILA.find(f=>f.veiculoId===currentVeicId).paradas||[]).length ? "destino" : "parada",
+    parada: currentParada.parada,
+    veiculoId: currentVeicId,
+    prefixo: v.prefixo,
+    fiscalId: user?.id || "",
+    hora: hora,
+    obs: $("#mObs").value,
+    irregular: $("#mIrregular").checked,
+    irregTipo: $("#mIrregular").checked ? $("#mIrregTipo").value : "",
+    foto: mFotoData || "",
+    atraso: eAtraso,
+    ts: Date.now()
+  };
+
+  await DB.put("fiscalizacoes", reg);
+
+  // Atualiza a fila
+  const filaRow = FILA.find(f => f.veiculoId === currentVeicId);
+  if(filaRow) {
+    filaRow.paradas[currentParadaIdx].real = hora;
+    if(!filaRow.paradas[currentParadaIdx].registros) filaRow.paradas[currentParadaIdx].registros = [];
+    filaRow.paradas[currentParadaIdx].registros.push(reg.id);
+    await FILA.saveRow(DATE, filaRow);
+  }
+
+  // Aplica penalidade se detectou atraso
+  if(eAtraso) {
+    const pena = {
+      id: DB.uid(),
+      data: DATE,
+      veiculoId: currentVeicId,
+      posicoes: 1,
+      motivo: "Atraso detectado pelo fiscal",
+      supervisorId: user?.id || "",
+      ts: Date.now()
+    };
+    await DB.put("penalidades", pena);
+    await FILA.aplicarPenalidade(DATE, currentVeicId, 1);
+    toast("Atraso detectado! Penalidade aplicada: -1 posição","warn");
+  } else {
+    toast("Parada registrada","go");
+  }
+
+  closeModal();
+  await load();
+  refresh();
+}
+
+async function paintHist(){
+  const user = getUser();
+  let regs = (await DB.all("fiscalizacoes")).sort((a,b) => b.ts - a.ts);
+  if(user && user.tipo === "Fiscal") regs = regs.filter(r => r.fiscalId === user.id);
+  regs = regs.filter(r => r.data === DATE);
+
+  $("#histN").innerHTML = `<i></i>${regs.length}`;
+  $("#histList").innerHTML = regs.length ? regs.map(r => {
+    const p = ROTA?.paradas?.find(x=>x.id===r.parada);
+    const tipoLabel = r.tipo === "saida" ? "🚗 Saída" : r.tipo === "destino" ? "🏁 Destino" : "🛑 Parada";
+    return `<div class="hist-item">
+      ${r.foto?`<img src="${r.foto}">`:`<div class="ph"></div>`}
+      <div style="flex:1">
+        <div><b>${esc(r.prefixo||"?")}</b> · <span class="num">${r.hora}</span> · ${tipoLabel}
+          ${r.irregular?`<span class="chip stop" style="margin-left:6px"><i></i>${esc(r.irregTipo||"Irregular")}</span>`:""}</div>
+        <div class="muted" style="font-size:13px">${esc(p?.nome||"?")} · ${(r.data||"").split("-").reverse().join("/")}${r.atraso?" · ⚠️ Atraso detectado":""}</div>
+        ${r.obs?`<div style="font-size:13px;margin-top:2px">${esc(r.obs)}</div>`:""}
+      </div>
+      <button class="btn ghost sm" data-del="${r.id}">×</button>
+    </div>`;
+  }).join("") : `<div class="table-empty">Nenhum registro para este dia.</div>`;
+
+  $$("#histList [data-del]").forEach(b => b.onclick = async () => {
+    await DB.del("fiscalizacoes", b.dataset.del);
+    paintHist();
+  });
+}
+</script>
+</body>
+</html>

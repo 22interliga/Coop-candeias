@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Proprietário · Cooperativa</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .fila-card{ background:#f7f8fa; border-radius:12px; padding:16px; margin-bottom:12px }
+  .fila-head{ display:grid; grid-template-columns:70px 1fr auto; gap:16px; align-items:start; margin-bottom:12px; padding-bottom:12px; border-bottom:2px solid var(--hair) }
+  .fila-num{ font-size:24px; font-weight:900; color:#2a3f86; text-align:center; line-height:1 }
+  .fila-info h3{ margin:0 0 6px 0; font-size:15px; font-weight:700 }
+  .fila-info p{ margin:0; font-size:12px; color:#6b7683; margin-bottom:4px }
+  .status-small{ display:inline-block; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:700; background:#e8f0ff; color:#2a3f86 }
+  .parada-line{ display:grid; grid-template-columns:35px 1fr 50px 50px; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid #e0e2e7; font-size:11px }
+  .parada-line:last-child{ border-bottom:none }
+  .parada-num{ text-align:center; font-weight:700; color:#2a3f86 }
+  .parada-name{ font-weight:600; color:var(--text) }
+  .time-val{ text-align:center; font-family:monospace; font-size:10px; font-weight:700 }
+  .cobrancas-tab{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px }
+  .cobrancas-tab button{ padding:12px; border-radius:8px; border:2px solid var(--hair); background:#fff; cursor:pointer; font-weight:600; font-size:13px; transition:.2s }
+  .cobrancas-tab button.active{ border-color:#2a3f86; background:#e8f0ff; color:#2a3f86 }
+  @media(max-width:768px){ .fila-head{ grid-template-columns:1fr; gap:8px } .parada-line{ grid-template-columns:1fr; gap:4px } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <div><div class="eyebrow">Meu acompanhamento</div><h1>Proprietário</h1></div>
+    <div><input type="date" id="date" class="input" style="width:auto"></div>
+  </div>
+
+  <div class="seg">
+    <button class="active" data-tab="fila">Meus veículos</button>
+    <button data-tab="cobrancas">Cobranças</button>
+  </div>
+
+  <!-- TAB: FILA -->
+  <div id="fila" class="tab active">
+    <div id="filaList"></div>
+  </div>
+
+  <!-- TAB: COBRANÇAS -->
+  <div id="cobrancas" class="tab" style="display:none">
+    <div class="cobrancas-tab">
+      <button class="active" data-f="all">Todas</button>
+      <button data-f="open">Em aberto</button>
+      <button data-f="paid">Quitadas</button>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Minhas cobranças</h3></div>
+      <div class="card-b" id="cobrancasList"></div>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+let DATE=T.today(), VEIC=[], PES=[], ROTA=null, FILA=[];
+let FILT="all";
+
+boot("proprietario.html", async ()=>{
+  requireLogin();
+  const user = getUser();
+  if(user.tipo !== "Proprietário") { toast("Acesso apenas para proprietários","stop"); logout(); return; }
+
+  $("#date").value = DATE;
+  $("#date").onchange = e => { DATE = e.target.value; refresh(); };
+
+  // Tabs
+  $$(".seg button").forEach(b => b.onclick = ()=>{
+    $$(".seg button").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    $$(".tab").forEach(t => t.style.display="none");
+    document.getElementById(b.dataset.tab).style.display="block";
+    if(b.dataset.tab === "cobrancas") paintCobrancas();
+  });
+
+  // Filtro cobranças
+  if(document.querySelector(".cobrancas-tab")){
+    $(".cobrancas-tab").addEventListener("click", e => {
+      if(e.target.dataset.f){
+        document.querySelectorAll(".cobrancas-tab button").forEach(x => x.classList.remove("active"));
+        e.target.classList.add("active");
+        FILT = e.target.dataset.f;
+        paintCobrancas();
+      }
+    });
+  }
+
+  await load();
+  refresh();
+});
+
+async function load(){
+  [VEIC, PES, ROTA, FILA] = await Promise.all([
+    DB.all("veiculos"),
+    DB.all("pessoas"),
+    DB.get("rotas", COOP.ROTA_PADRAO),
+    FILA.get(DATE)
+  ]);
+}
+
+async function refresh(){
+  await load();
+  const user = getUser();
+  const meus = VEIC.filter(v => v.proprietarioId === user.id);
+
+  if(!meus.length){
+    $("#filaList").innerHTML = `<div class="card"><div class="table-empty">Você não tem veículos cadastrados.</div></div>`;
+    return;
+  }
+
+  let html = "";
+  meus.forEach(v => {
+    const filaRow = FILA.find(f => f.veiculoId === v.id);
+    
+    if(!filaRow){
+      html += `<div class="card">
+        <div class="table-empty" style="padding:24px">
+          <b>${esc(v.prefixo)}</b> não está na fila de ${DATE}.
+        </div>
+      </div>`;
+      return;
+    }
+
+    const mot = nameOf(PES, v.motoristaId);
+    const cob = nameOf(PES, v.cobradorId);
+
+    let statusGeral = "Aguardando";
+    const todasCompletas = filaRow.paradas.every(p => p.real);
+    if(todasCompletas) statusGeral = "Completo";
+    else if(filaRow.paradas.some(p => p.real)) statusGeral = "Em andamento";
+
+    html += `<div class="fila-card">
+      <div class="fila-head">
+        <div class="fila-num">#${filaRow.filaPosicao}</div>
+        <div class="fila-info">
+          <h3>${esc(v.prefixo)} · ${esc(v.modelo)}</h3>
+          <p>Placa: <b>${esc(v.placa)}</b></p>
+          <p>Motorista: <b>${esc(mot)}</b></p>
+          <p>Cobrador: <b>${esc(cob)}</b></p>
+          <p>Documentação: <b>${v.documentacao || "OK"}</b></p>
+        </div>
+        <div style="text-align:center">
+          <span class="status-small">${statusGeral}</span>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#6b7683;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Percurso</div>
+        ${(filaRow.paradas||[]).map(p => `
+          <div class="parada-line">
+            <div class="parada-num">${p.ordem}</div>
+            <div class="parada-name">${esc(p.nome)}</div>
+            <div class="time-val">${p.previsto}</div>
+            <div class="time-val" style="color:${p.real?"#25c968":"#6b7683"}">${p.real || "—"}</div>
+          </div>
+        `).join("")}
+      </div>
+    </div>`;
+  });
+
+  $("#filaList").innerHTML = html;
+}
+
+async function paintCobrancas(){
+  const user = getUser();
+  const [cobs, pess] = await Promise.all([DB.all("cobrancas"), DB.all("pessoas")]);
+  
+  let rows = cobs.filter(c => c.cooperadoId === user.id).sort((a,b) => 
+    (a.situacao===b.situacao?0:a.situacao==="Aberto"?-1:1) || (a.vencimento||"").localeCompare(b.vencimento||"")
+  );
+  
+  if(FILT==="open") rows = rows.filter(c=>c.situacao==="Aberto");
+  if(FILT==="paid") rows = rows.filter(c=>c.situacao==="Quitado");
+
+  const abertas = cobs.filter(c => c.cooperadoId === user.id && c.situacao === "Aberto").reduce((s,c)=>s+Number(c.valor||0),0);
+  const quitadas = cobs.filter(c => c.cooperadoId === user.id && c.situacao === "Quitado").reduce((s,c)=>s+Number(c.valor||0),0);
+
+  let html = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+    <div class="card stat">
+      <div class="k">Em aberto</div>
+      <div class="v small">${money(abertas)}</div>
+      <div class="sub">${cobs.filter(c=>c.cooperadoId===user.id && c.situacao==="Aberto").length} cobrança(s)</div>
+    </div>
+    <div class="card stat">
+      <div class="k">Quitado</div>
+      <div class="v small">${money(quitadas)}</div>
+      <div class="sub">total</div>
+    </div>
+  </div>`;
+
+  html += rows.length
+    ? `<table class="table"><thead><tr><th>Tipo</th><th>Ref.</th><th>Venc.</th><th class="right">Valor</th><th>Status</th></tr></thead><tbody>` +
+      rows.map(c => {
+        const venc = (c.vencimento||"").split("-").reverse().join("/");
+        const atras = c.situacao==="Aberto" && c.vencimento && c.vencimento < T.today();
+        const chip = c.situacao==="Quitado" 
+          ? '<span class="chip go"><i></i>Quitado</span>'
+          : atras ? '<span class="chip stop"><i></i>Vencida</span>'
+          : '<span class="chip warn"><i></i>Em aberto</span>';
+        return `<tr><td>${esc(c.tipo)}</td><td class="muted" style="font-size:12px">${esc(c.referencia)}</td>
+          <td class="num">${venc}</td><td class="right num" style="font-weight:700">${money(c.valor)}</td>
+          <td>${chip}</td></tr>`;
+      }).join("") +
+      `</tbody></table>`
+    : `<div class="table-empty">Nenhuma cobrança para você.</div>`;
+
+  $("#cobrancasList").innerHTML = html;
+}
+</script>
+</body>
+</html>

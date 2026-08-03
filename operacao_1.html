@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Operação · Cooperativa</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .veic-row{ background:#f7f8fa; border-radius:12px; padding:16px; margin-bottom:12px }
+  .veic-head{ display:grid; grid-template-columns:80px 1fr 100px; gap:16px; align-items:start; margin-bottom:16px; padding-bottom:12px; border-bottom:2px solid var(--hair) }
+  .veic-prefixo{ font-size:28px; font-weight:900; color:#2a3f86; text-align:center; line-height:1 }
+  .veic-info h3{ margin:0 0 8px 0; font-size:16px; font-weight:700 }
+  .veic-info .info-row{ display:grid; grid-template-columns:80px 1fr; gap:12px; font-size:13px; margin-bottom:6px }
+  .info-label{ color:#6b7683; font-weight:600; text-transform:uppercase; letter-spacing:.5px }
+  .info-value{ font-weight:600; color:var(--text) }
+  .veic-status{ text-align:center }
+  .status-badge{ display:inline-block; padding:6px 12px; border-radius:8px; font-size:12px; font-weight:700; background:#e8f0ff; color:#2a3f86 }
+  .parada-mini{ display:grid; grid-template-columns:40px 1fr 60px; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid #e0e2e7; font-size:12px }
+  .parada-mini:last-child{ border-bottom:none }
+  .parada-num{ text-align:center; font-weight:700; color:#2a3f86 }
+  .parada-name{ font-weight:600; color:var(--text) }
+  .parada-time{ text-align:right; font-family:monospace; font-size:12px }
+  .btn-row{ display:flex; gap:6px; margin-top:12px }
+  .btn-row button{ flex:1; padding:10px; font-size:12px }
+  .intervalo-edit{ display:flex; gap:8px; align-items:center; background:#fff; padding:12px 16px; border-radius:10px; border:1px solid var(--hair); margin-bottom:16px }
+  .intervalo-edit input{ flex:0 0 60px; padding:6px 8px; border:1px solid var(--hair); border-radius:6px; text-align:center; font-weight:700 }
+  @media(max-width:768px){ .veic-head{ grid-template-columns:1fr; gap:8px } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <div><div class="eyebrow">Gestão de frotas</div><h1>Operação</h1></div>
+    <div><input type="date" id="date" class="input" style="width:auto"></div>
+  </div>
+
+  <div class="intervalo-edit">
+    <span style="flex:1"><b>Intervalo entre saídas:</b></span>
+    <input type="number" id="intervaloVal" min="5" max="60" value="10">
+    <span>min</span>
+    <button class="btn" id="saveIntervalo">Salvar</button>
+  </div>
+
+  <div id="board"></div>
+</div>
+
+<!-- MODAL: Editar documentação -->
+<div id="modalDoc" class="modal" style="display:none">
+  <div class="modal-content">
+    <button class="modal-close" id="closeModalDoc">×</button>
+    <h2>Documentação de <span id="docVeicName"></span></h2>
+    
+    <div style="margin-bottom:16px">
+      <label class="lbl">Status</label>
+      <select id="docStatus" class="input">
+        <option value="OK">OK</option>
+        <option value="Vencida">Vencida</option>
+        <option value="Em regularização">Em regularização</option>
+        <option value="Pendente">Pendente</option>
+      </select>
+    </div>
+
+    <div style="margin-bottom:16px">
+      <label class="lbl">Observação</label>
+      <input type="text" id="docObs" class="input" placeholder="Detalhe o problema">
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <button class="btn" id="saveDocBtn">Salvar</button>
+      <button class="btn ghost" id="cancelDocBtn">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Substituição -->
+<div id="modalSub" class="modal" style="display:none">
+  <div class="modal-content">
+    <button class="modal-close" id="closeModalSub">×</button>
+    <h2>Substituição de <span id="subVeicName"></span></h2>
+    
+    <div style="margin-bottom:16px">
+      <label class="lbl">Veículo substituto (reserva)</label>
+      <select id="subVeic" class="input"></select>
+    </div>
+
+    <div style="margin-bottom:16px">
+      <label class="lbl">Motivo</label>
+      <select id="subMotivo" class="input">
+        <option value="">Escolha o motivo</option>
+        <option value="Pane mecânica">Pane mecânica</option>
+        <option value="Acidente">Acidente</option>
+        <option value="Documentação vencida">Documentação vencida</option>
+        <option value="Falta do motorista">Falta do motorista</option>
+        <option value="Manutenção">Manutenção</option>
+        <option value="Outro">Outro</option>
+      </select>
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <button class="btn" id="saveSubBtn">Substituir</button>
+      <button class="btn ghost" id="cancelSubBtn">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+let DATE=T.today(), VEIC=[], PES=[], ROTA=null, FILA=[];
+let currentVeicForDoc=null, currentVeicForSub=null;
+
+boot("operacao.html", async ()=>{
+  requireLogin();
+  const user = getUser();
+  if(user.tipo !== "Presidente" && user.tipo !== "Administrador"){
+    toast("Acesso apenas para administração","stop");
+    logout();
+    return;
+  }
+
+  $("#date").value = DATE;
+  $("#date").onchange = e => { DATE = e.target.value; refresh(); };
+  $("#intervaloVal").value = COOP.INTERVALO_MIN;
+  $("#saveIntervalo").onclick = salvarIntervalo;
+
+  // Modais
+  $("#closeModalDoc").onclick = () => $("#modalDoc").style.display="none";
+  $("#cancelDocBtn").onclick = () => $("#modalDoc").style.display="none";
+  $("#saveDocBtn").onclick = saveDoc;
+
+  $("#closeModalSub").onclick = () => $("#modalSub").style.display="none";
+  $("#cancelSubBtn").onclick = () => $("#modalSub").style.display="none";
+  $("#saveSubBtn").onclick = saveSub;
+
+  await load();
+  refresh();
+});
+
+async function load(){
+  [VEIC, PES, ROTA, FILA] = await Promise.all([
+    DB.all("veiculos"),
+    DB.all("pessoas"),
+    DB.get("rotas", COOP.ROTA_PADRAO),
+    FILA.get(DATE)
+  ]);
+}
+
+async function salvarIntervalo(){
+  const novo = Number($("#intervaloVal").value);
+  if(novo < 5 || novo > 60) return toast("Intervalo deve estar entre 5 e 60 min","stop");
+  COOP.INTERVALO_MIN = novo;
+  await FILA.reindex(DATE, FILA, novo);
+  toast("Intervalo atualizado para "+novo+" min","go");
+  await load();
+  refresh();
+}
+
+async function refresh(){
+  await load();
+  const nowM = T.now();
+
+  if(!FILA.length || !ROTA){
+    $("#board").innerHTML = `<div class="card"><div class="table-empty">Sem fila para ${DATE}. <button class="btn" onclick="(async()=>{ 
+      const f=await FILA.build(T.today()); toast('Fila gerada','go'); location.reload(); 
+    })()">Gerar fila</button></div></div>`;
+    return;
+  }
+
+  let html = "";
+  FILA.forEach(f => {
+    const v = VEIC.find(x=>x.id===f.veiculoId)||{};
+    const mot = nameOf(PES, v.motoristaId);
+    const cob = nameOf(PES, v.cobradorId);
+    const prop = nameOf(PES, v.proprietarioId);
+
+    let statusGeral = "aguardando";
+    const todasCompletas = f.paradas.every(p => p.real);
+    if(todasCompletas) statusGeral = "completo";
+    else if(f.paradas.some(p => p.real)) statusGeral = "em_progresso";
+
+    html += `<div class="veic-row">
+      <div class="veic-head">
+        <div class="veic-prefixo">${esc(v.prefixo)}</div>
+        <div class="veic-info">
+          <h3>${esc(v.modelo)} · ${esc(v.marca)}</h3>
+          <div class="info-row"><span class="info-label">Placa</span><span class="info-value">${esc(v.placa)}</span></div>
+          <div class="info-row"><span class="info-label">Motorista</span><span class="info-value">${esc(mot)}</span></div>
+          <div class="info-row"><span class="info-label">Cobrador</span><span class="info-value">${esc(cob)}</span></div>
+          <div class="info-row"><span class="info-label">Proprietário</span><span class="info-value">${esc(prop)}</span></div>
+          <div class="info-row"><span class="info-label">Documentação</span><span class="info-value">${docChip(v.documentacao)}</span></div>
+        </div>
+        <div class="veic-status">
+          <div class="status-badge">${statusGeral === "completo" ? "✓ Completo" : statusGeral === "em_progresso" ? "Em andamento" : "Aguardando"}</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid #e0e2e7;padding-top:12px">
+        ${(f.paradas||[]).map(p => `
+          <div class="parada-mini">
+            <div class="parada-num">${p.ordem}</div>
+            <div class="parada-name">${esc(p.nome)}</div>
+            <div class="parada-time">${p.previsto}${p.real ? ` / ${p.real}` : ""}</div>
+          </div>
+        `).join("")}
+      </div>
+
+      <div class="btn-row">
+        <button class="btn ghost sm" onclick="openDocModal('${v.id}','${esc(v.prefixo)}')">📝 Doc</button>
+        <button class="btn ghost sm" onclick="openSubModal('${v.id}','${esc(v.prefixo)}')">🔄 Sub</button>
+      </div>
+    </div>`;
+  });
+
+  $("#board").innerHTML = html;
+}
+
+function docChip(doc){
+  if(!doc || doc === "OK") return `<span class="chip go"><i></i>OK</span>`;
+  if(doc === "Vencida") return `<span class="chip stop"><i></i>Vencida</span>`;
+  return `<span class="chip warn"><i></i>${esc(doc)}</span>`;
+}
+
+function openDocModal(veicId, prefixo){
+  currentVeicForDoc = veicId;
+  const v = VEIC.find(x=>x.id===veicId);
+  
+  $("#docVeicName").textContent = prefixo;
+  $("#docStatus").value = v.documentacao || "OK";
+  $("#docObs").value = "";
+  $("#modalDoc").style.display="block";
+}
+
+async function saveDoc(){
+  if(!currentVeicForDoc) return;
+  const v = VEIC.find(x=>x.id===currentVeicForDoc);
+  v.documentacao = $("#docStatus").value + ($("#docObs").value ? " - " + $("#docObs").value : "");
+  await DB.put("veiculos", v);
+  toast("Documentação atualizada","go");
+  $("#modalDoc").style.display="none";
+  await load();
+  refresh();
+}
+
+function openSubModal(veicId, prefixo){
+  currentVeicForSub = veicId;
+  
+  // Lista veículos inativos (reserva)
+  const reserva = VEIC.filter(x => x.situacao !== "Ativo" && x.situacao !== "Inativo");
+  
+  $("#subVeicName").textContent = prefixo;
+  $("#subVeic").innerHTML = `<option value="">Escolha um veículo</option>${reserva.map(x=>`<option value="${x.id}">${esc(x.prefixo)} · ${esc(x.modelo)}</option>`).join("")}`;
+  $("#subMotivo").value = "";
+  $("#modalSub").style.display="block";
+}
+
+async function saveSub(){
+  if(!currentVeicForSub) return;
+  const novoVeicId = $("#subVeic").value;
+  const motivo = $("#subMotivo").value;
+  
+  if(!novoVeicId) return toast("Escolha o veículo substituto","stop");
+  if(!motivo) return toast("Escolha o motivo","stop");
+
+  const filaRow = FILA.find(f=>f.veiculoId===currentVeicForSub);
+  if(!filaRow) return toast("Veículo não encontrado na fila","stop");
+
+  // Registra substituição
+  const sub = {
+    id: DB.uid(),
+    data: DATE,
+    saiuId: currentVeicForSub,
+    entrouId: novoVeicId,
+    motivo: motivo,
+    supervisorId: getUser()?.id || "",
+    ts: Date.now()
+  };
+  await DB.put("substituicoes", sub);
+
+  // Atualiza fila
+  filaRow.veiculoId = novoVeicId;
+  await FILA.saveRow(DATE, filaRow);
+
+  toast("Substituição realizada","go");
+  $("#modalSub").style.display="none";
+  await load();
+  refresh();
+}
+</script>
+</body>
+</html>
