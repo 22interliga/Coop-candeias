@@ -48,38 +48,59 @@
       if(useFS()){
         const batch = fs().batch();
         arr.forEach(o => batch.set(fs().collection(key(col)).doc(o.id), o));
-        await batch.commit(); return arr;
+        await batch.commit();
+        return;
       }
-      local.save(col,arr); return arr;
-    },
+      local.save(col,arr);
+    }
   };
 
-  /* -------------------- helpers de tempo -------------------- */
   window.T = {
-    toMin(hhmm){ const [h,m]=hhmm.split(":").map(Number); return h*60+m; },
+    toMin(hhmm){ const [h,m]=String(hhmm||"00:00").split(":").map(Number); return h*60+m; },
     toHHMM(min){ min=((min%1440)+1440)%1440; return String(Math.floor(min/60)).padStart(2,"0")+":"+String(min%60).padStart(2,"0"); },
     now(){ const d=new Date(); return d.getHours()*60+d.getMinutes(); },
     today(){ return new Date().toISOString().slice(0,10); },
     weekday(dateStr){ return new Date(dateStr+"T12:00:00").getDay(); },
   };
 
-  /* -------------------- lógica da fila -------------------- */
+  /* -------------------- lógica da fila com paradas -------------------- */
   window.FILA = {
     colFila(dateStr){ return "fila_"+dateStr; },
 
     // monta a fila do dia a partir das escalas dos veículos ativos
-    async build(dateStr){
+    async build(dateStr, rotaId){
       const wd = T.weekday(dateStr);
       const veic = await DB.all("veiculos");
+      const rota = await DB.get("rotas", rotaId || C.ROTA_PADRAO);
+      if(!rota) return [];
+
+      const paradas = (rota.paradas || []).sort((a,b) => a.ordem - b.ordem);
       const eleg = veic
         .filter(v => v.situacao==="Ativo" && (v.escalaDias||[]).includes(wd))
         .sort((a,b)=> (a.ordemBase||0)-(b.ordemBase||0));
+      
       const base = T.toMin(C.PRIMEIRA_SAIDA);
-      const fila = eleg.map((v,i)=>({
-        id:DB.uid(), veiculoId:v.id, ordem:i+1,
-        previsto:T.toHHMM(base + i*C.INTERVALO_MIN),
-        real:"", status:"aguardando", fiscalId:"", supervisorId:""
-      }));
+      const fila = eleg.map((v,i)=>{
+        // Cria entrada na fila com todas as paradas
+        const filaParadas = paradas.map((p,pi) => ({
+          parada: p.id,
+          nome: p.nome,
+          ordem: pi+1,
+          previsto: T.toHHMM(base + i*C.INTERVALO_MIN + pi*C.INTERVALO_PARADA_MIN),
+          real: "",
+          registros: [] // fiscalizações dessa parada
+        }));
+        return {
+          id: DB.uid(),
+          veiculoId: v.id,
+          filaPosicao: i+1,
+          rotaId: rota.id,
+          paradas: filaParadas,
+          status: "aguardando",
+          supervisorId: "",
+          ts: Date.now()
+        };
+      });
       await DB.setAll(this.colFila(dateStr), fila);
       return fila;
     },
@@ -88,17 +109,22 @@
 
     async saveRow(dateStr,row){ return DB.put(this.colFila(dateStr), row); },
 
-    // reordena e recalcula ordem + horário previsto
-    async reindex(dateStr, arr){
+    // reordena e recalcula ordem + horário previsto de TODAS as paradas
+    async reindex(dateStr, arr, intervaloMin){
       const base = T.toMin(C.PRIMEIRA_SAIDA);
-      arr.forEach((f,i)=>{ f.ordem=i+1; f.previsto=T.toHHMM(base+i*C.INTERVALO_MIN); });
+      arr.forEach((f,i)=>{
+        f.filaPosicao = i+1;
+        f.paradas.forEach((p,pi) => {
+          p.previsto = T.toHHMM(base + i*(intervaloMin||C.INTERVALO_MIN) + pi*C.INTERVALO_PARADA_MIN);
+        });
+      });
       await DB.setAll(this.colFila(dateStr), arr);
       return arr;
     },
 
     // penalidade: desce o veículo N posições e reorganiza a fila
     async aplicarPenalidade(dateStr, veiculoId, posicoes){
-      let arr = (await this.get(dateStr)).sort((a,b)=>a.ordem-b.ordem);
+      let arr = (await this.get(dateStr)).sort((a,b)=>a.filaPosicao-b.filaPosicao);
       const from = arr.findIndex(f=>f.veiculoId===veiculoId);
       if(from<0) return arr;
       const to = Math.min(arr.length-1, from+Number(posicoes));
@@ -117,42 +143,61 @@
     await DB.put("cooperativa",{id:"coop", nome:C.COOPERATIVA, rota:C.ROTA,
       cnpj:"", presidente:"Antônio Ferreira", caixa:0});
 
+    const rotas = [
+      {
+        id: "rota_candeias_madre",
+        nome: "Candeias → Madre de Deus",
+        origem: "Candeias",
+        destino: "Madre de Deus",
+        paradas: [
+          { id: "p1", nome: "Candeias (Origem)", ordem: 1 },
+          { id: "p2", nome: "Centro Candeias", ordem: 2 },
+          { id: "p3", nome: "Rodoviária Candeias", ordem: 3 },
+          { id: "p4", nome: "Entrada Madre de Deus", ordem: 4 },
+          { id: "p5", nome: "Madre de Deus (Destino)", ordem: 5 }
+        ]
+      }
+    ];
+    await DB.setAll("rotas", rotas);
+
     const pessoas = [
-      ["João Prop","Proprietário","71 99100-0001"],["Carla Prop","Proprietário","71 99100-0002"],
-      ["Marcos Prop","Proprietário","71 99100-0003"],["Rita Prop","Proprietário","71 99100-0004"],
-      ["Pedro Mot","Motorista","71 98800-0001"],["Luís Mot","Motorista","71 98800-0002"],
-      ["Sérgio Mot","Motorista","71 98800-0003"],["Ana Mot","Motorista","71 98800-0004"],
-      ["Diego Mot","Motorista","71 98800-0005"],
-      ["Cláudio Sup","Supervisor","71 97700-0001"],["Fábio Fisc","Fiscal","71 97700-0002"],
-    ].map((p,i)=>({id:"p"+i, nome:p[0], tipo:p[1], telefone:p[2], doc:""}));
+      { id:"mot1", tipo:"Motorista", nome:"João da Silva", telefone:"71987654321", doc:"123.456.789-00", situacao:"Ativo" },
+      { id:"mot2", tipo:"Motorista", nome:"Carlos Oliveira", telefone:"71987654322", doc:"234.567.890-11", situacao:"Ativo" },
+      { id:"fis1", tipo:"Fiscal", nome:"Fábio Santos", telefone:"71987654323", doc:"345.678.901-22", situacao:"Ativo" },
+      { id:"fis2", tipo:"Fiscal", nome:"Marcos Costa", telefone:"71987654324", doc:"456.789.012-33", situacao:"Ativo" },
+      { id:"prop1", tipo:"Proprietário", nome:"Roberto Lima", telefone:"71987654325", doc:"567.890.123-44", situacao:"Ativo" },
+      { id:"prop2", tipo:"Proprietário", nome:"Fernando Gomes", telefone:"71987654326", doc:"678.901.234-55", situacao:"Ativo" },
+      { id:"sup1", tipo:"Supervisor", nome:"Antônio Pereira", telefone:"71987654327", doc:"789.012.345-66", situacao:"Ativo" },
+      { id:"pres1", tipo:"Presidente", nome:"Antônio Ferreira", telefone:"71987654328", doc:"890.123.456-77", situacao:"Ativo" }
+    ];
     await DB.setAll("pessoas", pessoas);
-    const prop = pessoas.filter(p=>p.tipo==="Proprietário");
-    const mot  = pessoas.filter(p=>p.tipo==="Motorista");
 
-    const allDays=[1,2,3,4,5], seg_qua_sex=[1,3,5], ter_qui_sab=[2,4,6];
-    const escalas=[allDays,seg_qua_sex,ter_qui_sab,allDays,seg_qua_sex,ter_qui_sab];
-    const veic = [
-      ["101","JKL-1A23","Sprinter","Mercedes",2021,20,"Ativo"],
-      ["102","MNO-2B34","Master","Renault",2020,16,"Ativo"],
-      ["103","PQR-3C45","Ducato","Fiat",2019,18,"Ativo"],
-      ["104","STU-4D56","Daily","Iveco",2022,20,"Ativo"],
-      ["105","VWX-5E67","Marcopolo","Volksbus",2018,32,"Manutenção"],
-      ["106","YZA-6F78","Sprinter","Mercedes",2023,20,"Ativo"],
-    ].map((v,i)=>({
-      id:"v"+i, prefixo:v[0], placa:v[1], modelo:v[2], marca:v[3], ano:v[4],
-      capacidade:v[5], situacao:v[6], ordemBase:i,
-      proprietarioId:prop[i%prop.length].id, motoristaId:mot[i%mot.length].id,
-      reservas:[], telefone:"71 99000-00"+i, documentacao:"OK",
-      escalaTipo:"personalizada", escalaDias:escalas[i], docVenc:"",
-    }));
-    await DB.setAll("veiculos", veic);
+    const veiculos = [
+      { id:"v1", prefixo:"001", placa:"BA-0001", modelo:"Kombi", marca:"VW", ano:2015, capacidade:8, proprietarioId:"prop1", motoristaId:"mot1", situacao:"Ativo", escalaDias:[1,2,3,4,5], documentacao:"OK", ordemBase:1 },
+      { id:"v2", prefixo:"002", placa:"BA-0002", modelo:"Kombi", marca:"VW", ano:2016, capacidade:8, proprietarioId:"prop2", motoristaId:"mot2", situacao:"Ativo", escalaDias:[1,2,3,4,5], documentacao:"OK", ordemBase:2 },
+      { id:"v3", prefixo:"003", placa:"BA-0003", modelo:"Kombi", marca:"VW", ano:2017, capacidade:8, proprietarioId:"prop1", motoristaId:"", situacao:"Ativo", escalaDias:[1,2,3,4,5], documentacao:"OK", ordemBase:3 }
+    ];
+    await DB.setAll("veiculos", veiculos);
 
-    await DB.setAll("financeiro",[
-      {id:"f1",tipo:"Mensalidade",descricao:"Mensalidade cooperados (jul)",valor:1800,data:T.today()},
-      {id:"f2",tipo:"Despesa",descricao:"Aluguel do ponto de apoio",valor:-650,data:T.today()},
-      {id:"f3",tipo:"Taxa",descricao:"Taxa semanal",valor:420,data:T.today()},
-    ]);
+    const cobrancas = [
+      { id:"cob1", cooperadoId:"prop1", tipo:"Mensalidade", valor:800, referencia:"Jan/2026", vencimento:"2026-01-15", situacao:"Quitado", pagoEm:"2026-01-10", ts:Date.now() }
+    ];
+    await DB.setAll("cobrancas", cobrancas);
+
+    const financeiro = [
+      { id:"fin1", tipo:"Mensalidade", valor:800, descricao:"Cota proprietário Jan", data:"2026-01-10", ts:Date.now() }
+    ];
+    await DB.setAll("financeiro", financeiro);
+
+    const penalidades = [];
+    const substituicoes = [];
+    const fiscalizacoes = [];
+
+    await DB.setAll("penalidades", penalidades);
+    await DB.setAll("substituicoes", substituicoes);
+    await DB.setAll("fiscalizacoes", fiscalizacoes);
 
     localStorage.setItem(flag,"1");
   };
+
 })();
