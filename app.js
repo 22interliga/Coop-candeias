@@ -15,6 +15,7 @@ const NAV = [
   ["operacao.html","Operação"],
   ["fiscal.html","Fiscal"],
   ["cadastros.html","Cadastros"],
+  ["cobrancas.html","Cobranças"],
   ["financeiro.html","Financeiro"],
 ];
 
