@@ -161,9 +161,9 @@ $("#userNameTop").textContent = user.nome;
 $("#opDate").valueAsDate = new Date();
 
 // TABS
-$$("#tab .tab").forEach(tab => {
+$$(".tab").forEach(tab => {
   tab.onclick = () => {
-    $$("#tab .tab").forEach(x => x.classList.remove("active"));
+    $$(".tab").forEach(x => x.classList.remove("active"));
     tab.classList.add("active");
     const tabId = tab.dataset.tab;
     $$(".panel").forEach(p => p.classList.remove("active"));
@@ -179,7 +179,7 @@ $("#loadFilaBtn").onclick = async () => {
   if(!date) { toast("Escolha uma data","stop"); return; }
   currentFila = await FILA.build(date, COOP.ROTA_PADRAO);
   renderFila(currentFila);
-  $("#intervaloInput").value = (await getConfig()).INTERVALO_MIN;
+  $("#intervaloInput").value = COOP.INTERVALO_MIN;
 };
 
 function renderFila(fila) {

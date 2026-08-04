@@ -121,9 +121,9 @@ const user = getUser();
 $("#userNameTop").textContent = user.nome;
 
 // Tabs
-$$("#tab .tab").forEach(tab => {
+$$(".tab").forEach(tab => {
   tab.onclick = () => {
-    $$("#tab .tab").forEach(x => x.classList.remove("active"));
+    $$(".tab").forEach(x => x.classList.remove("active"));
     tab.classList.add("active");
     const tabId = tab.dataset.tab;
     $$(".panel").forEach(p => p.classList.remove("active"));
