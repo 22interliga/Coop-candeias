@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Minha Escala</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .mot-header{ background:linear-gradient(135deg, #2a3f86 0%, #1a2547 100%);color:#fff;padding:24px }
+  .mot-header h1{ margin:0;font-size:24px }
+  .mot-header .subtitle{ font-size:13px;color:#b0c4f0;margin-top:4px }
+  .tab-bar{ background:#fff;border-bottom:1px solid var(--hair);display:flex;padding:0 24px }
+  .tab{ padding:16px 24px;cursor:pointer;font-weight:600;color:#6b7683;border-bottom:3px solid transparent;transition:.2s;font-size:14px }
+  .tab:hover{ color:var(--text) }
+  .tab.active{ color:#2a3f86;border-bottom-color:#2a3f86 }
+  .content{ padding:32px }
+  .panel{ display:none }
+  .panel.active{ display:block }
+  .escala-card{ background:#fff;border:2px solid #2a3f86;border-radius:12px;padding:24px;margin-bottom:16px;text-align:center }
+  .escala-card.inativo{ border-color:var(--hair);opacity:.6 }
+  .horario-grande{ font-size:48px;font-weight:900;color:#2a3f86;display:block;margin:16px 0 }
+  .veiculo-info{ background:#f9fafb;border-radius:8px;padding:16px;margin:20px 0;font-size:13px }
+  .info-row{ display:flex;justify-content:space-between;margin:8px 0;padding:8px 0;border-bottom:1px solid var(--hair) }
+  .info-row:last-child{ border-bottom:none }
+  .info-label{ color:#6b7683;font-weight:600 }
+  .rota-paradas{ background:#f9fafb;border-radius:8px;padding:16px;margin-top:16px;font-size:13px }
+  .parada{ display:grid;grid-template-columns:40px 1fr 80px;gap:12px;padding:12px;border-bottom:1px solid var(--hair);align-items:center }
+  .parada:last-child{ border-bottom:none }
+  .parada-num{ font-weight:900;color:#2a3f86;font-size:18px }
+  .parada-nome strong{ display:block }
+  .parada-nome small{ color:#6b7683;font-size:11px;margin-top:2px }
+  .parada-hora strong{ display:block;text-align:right;color:#2a3f86;font-weight:700 }
+  .penalidade-item{ background:#fff3cd;border-radius:8px;padding:12px;margin-bottom:8px;font-size:13px;border-left:3px solid #ff9800 }
+  .escala-mes{ background:#f9fafb;border-radius:8px;padding:12px;margin-bottom:8px;font-size:13px }
+  @media(max-width:768px){
+    .content{ padding:16px }
+    .horario-grande{ font-size:36px }
+  }
+</style>
+</head>
+<body>
+<div class="mot-header">
+  <h1>🚗 Minha Escala</h1>
+  <div class="subtitle">Condução e Programação</div>
+  <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center">
+    <div style="font-size:13px;color:#b0c4f0">Logado como: <strong id="userNameTop" style="color:#fff"></strong></div>
+    <button class="btn ghost" id="logoutBtn" style="color:#b0c4f0;border-color:#b0c4f0;padding:6px 12px;font-size:12px">Sair</button>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <div class="tab active" data-tab="hoje">📍 Hoje</div>
+  <div class="tab" data-tab="semana">📅 Próximos Dias</div>
+  <div class="tab" data-tab="penalidades">⚠️ Penalidades</div>
+</div>
+
+<div class="content">
+
+  <!-- HOJE -->
+  <div class="panel active" id="hoje">
+    <h2>Viagem de Hoje</h2>
+    
+    <div id="escalasHoje" style="max-height:600px;overflow-y:auto"></div>
+  </div>
+
+  <!-- PRÓXIMOS DIAS -->
+  <div class="panel" id="semana">
+    <h2>Próximos 7 Dias</h2>
+    <div id="escalasSemana" style="max-height:600px;overflow-y:auto"></div>
+  </div>
+
+  <!-- PENALIDADES -->
+  <div class="panel" id="penalidades">
+    <h2>Minhas Penalidades</h2>
+    <p style="color:#6b7683;font-size:14px">Registro de penalidades aplicadas durante as viagens.</p>
+    <div id="penalList" style="margin-top:16px;max-height:500px;overflow-y:auto"></div>
+  </div>
+
+</div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+requireLogin();
+const user = getUser();
+$("#userNameTop").textContent = user.nome;
+
+// Tabs
+$$("#tab .tab").forEach(tab => {
+  tab.onclick = () => {
+    $$("#tab .tab").forEach(x => x.classList.remove("active"));
+    tab.classList.add("active");
+    const tabId = tab.dataset.tab;
+    $$(".panel").forEach(p => p.classList.remove("active"));
+    $(`#${tabId}`).classList.add("active");
+  };
+});
+
+// Load escala de hoje
+(async () => {
+  const today = new Date().toISOString().split("T")[0];
+  const fila = await FILA.build(today, ROTA_PADRAO);
+  
+  const minhas = fila.filter(v => v.motoristaId === user.id);
+  
+  if(!minhas.length) {
+    $("#escalasHoje").innerHTML = `<div style="background:#f0f4ff;border-radius:8px;padding:20px;text-align:center;color:#6b7683">
+      📭 Você não tem viagens programadas para hoje.
+    </div>`;
+    return;
+  }
+
+  let html = "";
+  for(const escala of minhas) {
+    const veiculo = await DB.get("veiculos", escala.veiculoId);
+    const primParada = escala.paradas[0];
+    const ultParada = escala.paradas[escala.paradas.length-1];
+    
+    html += `
+      <div class="escala-card">
+        <h3 style="margin:0 0 8px 0;color:#6b7683;font-size:14px;text-transform:uppercase;letter-spacing:.5px">Veículo Escalado</h3>
+        <strong style="font-size:20px">${esc(escala.veiculoId)}</strong>
+        <br><small style="color:#6b7683">${esc(veiculo?.placa || "---")}</small>
+        
+        <div style="margin:20px 0">
+          <small style="color:#6b7683;text-transform:uppercase;letter-spacing:.5px;font-weight:700">Horário de Saída</small>
+          <span class="horario-grande">${primParada?.previsto || "---"}</span>
+        </div>
+        
+        <div style="background:#e8f5e9;border-radius:8px;padding:12px;margin:16px 0;font-size:13px;color:#2e7d32;font-weight:700">
+          ✓ Apresentar-se 15 minutos antes da saída
+        </div>
+
+        <div class="rota-paradas">
+          <strong style="display:block;margin-bottom:12px;text-align:left">Rota Completa:</strong>
+          ${escala.paradas.map((p, pi) => `
+            <div class="parada">
+              <div class="parada-num">${pi+1}</div>
+              <div class="parada-nome">
+                <strong>${esc(p.nome)}</strong>
+                <small>${pi === 0 ? "Saída" : pi === escala.paradas.length-1 ? "Destino" : "Parada"}</small>
+              </div>
+              <div class="parada-hora">
+                <strong>${p.previsto}</strong>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+
+        <div style="margin-top:16px;padding:16px;background:#f0f4ff;border-radius:8px;font-size:12px;color:#6b7683">
+          <strong>Status Atual:</strong> ${escala.status || "Aguardando saída"}
+        </div>
+      </div>
+    `;
+  }
+  
+  $("#escalasHoje").innerHTML = html;
+})();
+
+// Próximos 7 dias
+(async () => {
+  const today = new Date();
+  const semana = [];
+  
+  for(let i = 1; i <= 7; i++) {
+    const date = new Date(today);
+    date.setDate(date.getDate() + i);
+    semana.push(date.toISOString().split("T")[0]);
+  }
+
+  let html = "";
+  for(const dateStr of semana) {
+    const fila = await FILA.build(dateStr, ROTA_PADRAO);
+    const minhas = fila.filter(v => v.motoristaId === user.id);
+    
+    const dataObj = new Date(dateStr);
+    const dia = dataObj.toLocaleDateString("pt-BR", {weekday: "long", month: "long", day: "numeric"});
+    
+    html += `<h3 style="margin-top:24px;margin-bottom:12px;color:#2a3f86">${dia}</h3>`;
+    
+    if(minhas.length === 0) {
+      html += `<div class="escala-mes" style="color:#6b7683">Nenhuma escala programada</div>`;
+    } else {
+      html += minhas.map(e => {
+        const prim = e.paradas[0];
+        return `<div class="escala-mes">
+          <strong>${esc(e.veiculoId)}</strong> · Saída: <strong>${prim?.previsto || "---"}</strong>
+        </div>`;
+      }).join("");
+    }
+  }
+  
+  $("#escalasSemana").innerHTML = html;
+})();
+
+// Penalidades
+(async () => {
+  const todas = await DB.all("penalidades");
+  const minhas = todas.filter(p => {
+    // Precisa ter referência ao motorista ou ao veículo que ele dirige
+    return true; // Simplificado: mostrar todas pra agora
+  });
+  
+  $("#penalList").innerHTML = minhas.map(p => 
+    `<div class="penalidade-item">
+      <strong>${esc(p.veiculoId || "---")}</strong> · ${esc(p.motivo)}<br>
+      <small>Posições: ${p.posicoes} · ${new Date(p.ts).toLocaleString("pt-BR")}</small>
+    </div>`
+  ).join("") || "<p style='color:#6b7683'>Nenhuma penalidade registrada.</p>";
+})();
+
+// Logout
+$("#logoutBtn").onclick = () => { logout(); location.href = "login.html"; };
+</script>
+</body>
+</html>
