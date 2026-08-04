@@ -89,9 +89,9 @@ const user = getUser();
 $("#userNameTop").textContent = user.nome;
 
 // Tabs
-$$("#tab .tab").forEach(tab => {
+$$(".tab").forEach(tab => {
   tab.onclick = () => {
-    $$("#tab .tab").forEach(x => x.classList.remove("active"));
+    $$(".tab").forEach(x => x.classList.remove("active"));
     tab.classList.add("active");
     const tabId = tab.dataset.tab;
     $$(".panel").forEach(p => p.classList.remove("active"));
@@ -102,7 +102,7 @@ $$("#tab .tab").forEach(tab => {
 // Load escala de hoje
 (async () => {
   const today = new Date().toISOString().split("T")[0];
-  const fila = await FILA.build(today, ROTA_PADRAO);
+  const fila = await FILA.build(today, COOP.ROTA_PADRAO);
   
   const minhas = fila.filter(v => v.motoristaId === user.id);
   
@@ -173,7 +173,7 @@ $$("#tab .tab").forEach(tab => {
 
   let html = "";
   for(const dateStr of semana) {
-    const fila = await FILA.build(dateStr, ROTA_PADRAO);
+    const fila = await FILA.build(dateStr, COOP.ROTA_PADRAO);
     const minhas = fila.filter(v => v.motoristaId === user.id);
     
     const dataObj = new Date(dateStr);

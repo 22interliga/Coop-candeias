@@ -121,9 +121,9 @@ const user = getUser();
 $("#userNameTop").textContent = user.nome;
 
 // Tabs
-$$("#tab .tab").forEach(tab => {
+$$(".tab").forEach(tab => {
   tab.onclick = () => {
-    $$("#tab .tab").forEach(x => x.classList.remove("active"));
+    $$(".tab").forEach(x => x.classList.remove("active"));
     tab.classList.add("active");
     const tabId = tab.dataset.tab;
     $$(".panel").forEach(p => p.classList.remove("active"));
@@ -139,7 +139,7 @@ $("#mesHistorico").value = thisMonth;
 // Load operação do dia
 $("#dataOp").oninput = async () => {
   const date = $("#dataOp").value;
-  const fila = await FILA.build(date, ROTA_PADRAO);
+  const fila = await FILA.build(date, COOP.ROTA_PADRAO);
   const meusFila = fila.filter(v => v.veiculoId.startsWith(`${user.id}_`));
   
   if(!meusFila.length) {
