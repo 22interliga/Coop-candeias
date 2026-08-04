@@ -178,7 +178,7 @@ let currentFila = [];
 $("#loadFilaBtn").onclick = async () => {
   const date = $("#opDate").value;
   if(!date) { toast("Escolha uma data","stop"); return; }
-  currentFila = await FILA.build(date, ROTA_PADRAO);
+  currentFila = await FILA.build(date, COOP.ROTA_PADRAO);
   renderFila(currentFila);
   $("#saveFilaBtn").style.display = "inline-block";
   $("#intervaloInput").value = (await getConfig()).INTERVALO_MIN;
@@ -214,7 +214,7 @@ $("#recalcFilaBtn").onclick = async () => {
   const intervalo = parseInt($("#intervaloInput").value);
   if(!intervalo) { toast("Digite o intervalo","stop"); return; }
   
-  currentFila = await FILA.build(date, ROTA_PADRAO);
+  currentFila = await FILA.build(date, COOP.ROTA_PADRAO);
   currentFila = await FILA.reindex(date, currentFila, intervalo);
   renderFila(currentFila);
   logAuditAction("Recalcular fila", `intervalo: ${intervalo}min`);
@@ -374,16 +374,8 @@ $("#salvarEscalaBtn").onclick = async () => {
 
 $("#cancelarEscalaBtn").onclick = () => renderEscalaMatriz();
 
-// Load escala ao abrir aba
-$$(".tab").forEach(tab => {
-  if(tab.dataset.tab === "escalas") {
-    tab.onclick = renderEscalaMatriz;
-  }
-});
-
-(async () => {
-  await renderEscalaMatriz();
-})();
+// Load escala na primeira vez
+renderEscalaMatriz();
 
 // Logout
 $("#logoutBtn").onclick = () => { logout(); location.href = "login.html"; };
