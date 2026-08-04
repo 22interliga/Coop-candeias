@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Meu Painel · Cooperativa</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span><div>COOP<small>Motorista</small></div></div>
+    <span class="spacer"></span>
+    <span id="user" style="color:#c3cfe4;font-size:14px;font-weight:700"></span>
+    <button class="btn ghost sm" id="btnSair" style="margin-left:8px">Sair</button>
+  </div>
+
+  <div style="max-width:800px;margin:0 auto;padding:22px 18px 60px">
+    <div class="page-head mb">
+      <div><div class="eyebrow">Seu painel</div><h1 id="dia"></h1></div>
+    </div>
+
+    <div class="grid g-2 mb" id="kpis"></div>
+
+    <div class="card mb">
+      <div class="card-h"><h3>Sua agenda</h3></div>
+      <div class="card-b" id="agenda"></div>
+    </div>
+
+    <div class="card mb">
+      <div class="card-h"><h3>Fila de hoje</h3></div>
+      <div class="card-b" id="fila"></div>
+    </div>
+
+    <div class="card mb">
+      <div class="card-h"><h3>Penalidades</h3></div>
+      <div class="card-b" id="pen"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><h3>Documentação</h3></div>
+      <div class="card-b" id="doc"></div>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script>
+// check login
+const userId = localStorage.getItem(COOP.COL+"userId");
+const userName = localStorage.getItem(COOP.COL+"userName");
+const userType = localStorage.getItem(COOP.COL+"userType");
+if(!userId || userType!=="Motorista") location.href="login.html";
+
+$("#user").textContent=userName;
+$("#btnSair").onclick=()=>{ localStorage.removeItem(COOP.COL+"userId");
+  localStorage.removeItem(COOP.COL+"userName"); localStorage.removeItem(COOP.COL+"userType");
+  location.href="login.html"; };
+
+(async()=>{
+  const d=new Date();
+  $("#dia").textContent=d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"});
+
+  const [veic,pen]=await Promise.all([DB.all("veiculos"),DB.all("penalidades")]);
+  // procura o veículo onde ele é motorista
+  const seu=veic.find(v=>v.motoristaId===userId);
+  if(!seu){
+    $("#agenda").innerHTML=`<div class="table-empty">Você não está cadastrado como motorista de nenhum veículo.</div>`;
+    $("#fila").innerHTML=`<div class="table-empty">—</div>`;
+    return;
+  }
+
+  // agenda: dias que ele roda
+  const dias=COOP.DIAS.map((d,i)=>seu.escalaDias?.includes(i)?d:"").filter(x=>x);
+  $("#agenda").innerHTML=`<div class="list-row">
+    <div><b>Prefixo</b><div class="muted">${esc(seu.prefixo)}</div></div>
+    <div>${esc(seu.modelo)} · ${esc(seu.marca)} ${seu.ano}</div></div>
+    <div class="list-row"><b>Roda</b><div>${dias.join(" · ")||"—"}</div></div>
+    <div class="list-row"><b>Capacidade</b><div class="num">${seu.capacidade} passageiros</div></div>`;
+
+  // fila de hoje
+  const wd=T.weekday(T.today());
+  if(!seu.escalaDias?.includes(wd)){
+    $("#fila").innerHTML=`<div class="table-empty">Você não trabalha hoje.</div>`;
+  }else{
+    const fila=await FILA.get(T.today());
+    const row=fila.find(f=>f.veiculoId===seu.id);
+    if(!row){
+      $("#fila").innerHTML=`<div class="table-empty">Você não está na fila de hoje.</div>`;
+    }else{
+      $("#fila").innerHTML=`<div class="list-row">
+        <div><b>Posição</b><div class="num" style="font-size:24px;font-weight:800;color:var(--brand)">${row.ordem}</div></div>
+        <div><b>Horário previsto</b><div class="num">${row.previsto}</div></div>
+        <div><b>Status</b><div>${row.status==="saiu"?'<span class="chip brand"><i></i>Saiu</span>'
+          : row.status==="aguardando"?'<span class="chip go"><i></i>Aguardando</span>':'—'}</div></div>
+        <div><b>Horário real</b><div class="num">${row.real||"—"}</div></div></div>`;
+    }
+  }
+
+  // penalidades dele
+  const suas=pen.filter(p=>p.veiculoId===seu.id);
+  $("#pen").innerHTML=suas.length?suas.map(p=>`<div class="list-row">
+    <div><b>${T.today()===p.data?"Hoje":"Outro dia"}</b><div class="muted">${(p.data||"").split("-").reverse().join("/")}</div></div>
+    <div><b>Desceu</b><div class="num">${p.posicoes} posições</div></div>
+    <div><b>Motivo</b><div>${esc(p.motivo||"—")}</div></div></div>`).join("")
+    :`<div class="table-empty">Você não tem penalidades.</div>`;
+
+  // doc
+  $("#doc").innerHTML=`<div class="list-row">
+    <div><b>Situação</b><div>${seu.documentacao==="OK"?'<span class="chip go"><i></i>Em dia</span>'
+      : seu.documentacao==="Vencida"?'<span class="chip stop"><i></i>Vencida</span>'
+      : `<span class="chip warn"><i></i>${seu.documentacao}</span>`}</div></div></div>`;
+
+  // kpi
+  const kpi=(k,v,cls)=>`<div class="card stat ${cls||""}"><div class="k">${k}</div><div class="v small">${v}</div></div>`;
+  $("#kpis").innerHTML=kpi("Seu prefixo",esc(seu.prefixo))+kpi("Penalidades",String(suas.length));
+})();
+</script>
+</body>
+</html>
