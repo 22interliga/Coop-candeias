@@ -416,11 +416,10 @@ function setupModal(modalId, openBtnId, closeBtnId) {
 
 // Load config into form
 (async () => {
-  const cfg = await getConfig();
-  $("#cfgIntervalo").value = cfg.INTERVALO_MIN;
-  $("#cfgPrimeiraSaida").value = cfg.PRIMEIRA_SAIDA;
-  $("#cfgTolerancia").value = cfg.TOLERANCIA_MIN;
-  $("#cfgIntervaloParada").value = cfg.INTERVALO_PARADA_MIN;
+  $("#cfgIntervalo").value = COOP.INTERVALO_MIN;
+  $("#cfgPrimeiraSaida").value = COOP.PRIMEIRA_SAIDA;
+  $("#cfgTolerancia").value = COOP.TOLERANCIA_MIN;
+  $("#cfgIntervaloParada").value = COOP.INTERVALO_PARADA_MIN || 15;
 })();
 </script>
 </body>
