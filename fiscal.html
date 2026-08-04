@@ -109,7 +109,7 @@
 <script src="db.js"></script>
 <script src="app.js"></script>
 <script>
-let DATE=T.today(), VEIC=[], PES=[], ROTA=null, FILA=[];
+let DATE=T.today(), VEIC=[], PES=[], ROTA=null, FILA_DATA=[];
 let mFotoData=null, currentVeicId="", currentParada=null, currentParadaIdx=0;
 
 boot("fiscal.html", async ()=>{
@@ -167,25 +167,29 @@ boot("fiscal.html", async ()=>{
 });
 
 async function load(){
-  [VEIC, PES, ROTA, FILA] = await Promise.all([
+  const [veic, pes, rota, fila] = await Promise.all([
     DB.all("veiculos"),
     DB.all("pessoas"),
     DB.get("rotas", COOP.ROTA_PADRAO),
     FILA.get(DATE)
   ]);
+  VEIC = veic;
+  PES = pes;
+  ROTA = rota;
+  FILA_DATA = fila;
 }
 
 async function refresh(){
   await load();
   const nowM = T.now();
 
-  if(!FILA.length){
+  if(!FILA_DATA.length){
     $("#filaList").innerHTML = `<div class="table-empty">Sem fila para ${DATE}.</div>`;
     return;
   }
 
   let html = "";
-  FILA.forEach((f, idx) => {
+  FILA_DATA.forEach((f, idx) => {
     const v = VEIC.find(x=>x.id===f.veiculoId)||{};
     const mot = nameOf(PES, v.motoristaId);
     const primeiraParada = f.paradas?.[0];
@@ -214,7 +218,7 @@ function openParadaModal(veicId, paradaIdx, titulo){
   currentParadaIdx = paradaIdx;
   currentParada = null;
 
-  const filaRow = FILA.find(f => f.veiculoId === veicId);
+  const filaRow = FILA_DATA.find(f => f.veiculoId === veicId);
   if(!filaRow) return toast("Veículo não encontrado na fila","stop");
 
   currentParada = filaRow.paradas[paradaIdx];
@@ -270,7 +274,7 @@ async function saveParada(){
   const reg = {
     id: DB.uid(),
     data: DATE,
-    tipo: currentParada.ordem === 1 ? "saida" : currentParada.ordem === (FILA.find(f=>f.veiculoId===currentVeicId).paradas||[]).length ? "destino" : "parada",
+    tipo: currentParada.ordem === 1 ? "saida" : currentParada.ordem === (FILA_DATA.find(f=>f.veiculoId===currentVeicId).paradas||[]).length ? "destino" : "parada",
     parada: currentParada.parada,
     veiculoId: currentVeicId,
     prefixo: v.prefixo,
@@ -287,7 +291,7 @@ async function saveParada(){
   await DB.put("fiscalizacoes", reg);
 
   // Atualiza a fila
-  const filaRow = FILA.find(f => f.veiculoId === currentVeicId);
+  const filaRow = FILA_DATA.find(f => f.veiculoId === currentVeicId);
   if(filaRow) {
     filaRow.paradas[currentParadaIdx].real = hora;
     if(!filaRow.paradas[currentParadaIdx].registros) filaRow.paradas[currentParadaIdx].registros = [];
