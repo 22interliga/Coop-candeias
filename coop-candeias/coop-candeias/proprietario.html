@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Meus Veículos</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .prop-header{ background:linear-gradient(135deg, #2a3f86 0%, #1a2547 100%);color:#fff;padding:24px }
+  .prop-header h1{ margin:0;font-size:24px }
+  .prop-header .subtitle{ font-size:13px;color:#b0c4f0;margin-top:4px }
+  .tab-bar{ background:#fff;border-bottom:1px solid var(--hair);display:flex;padding:0 24px }
+  .tab{ padding:16px 24px;cursor:pointer;font-weight:600;color:#6b7683;border-bottom:3px solid transparent;transition:.2s;font-size:14px }
+  .tab:hover{ color:var(--text) }
+  .tab.active{ color:#2a3f86;border-bottom-color:#2a3f86 }
+  .content{ padding:32px }
+  .panel{ display:none }
+  .panel.active{ display:block }
+  .veiculo-card{ background:#fff;border:1px solid var(--hair);border-radius:12px;padding:20px;margin-bottom:16px }
+  .veiculo-header{ display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px }
+  .veiculo-header h3{ margin:0;font-size:16px }
+  .veiculo-status{ display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700 }
+  .status-em-viagem{ background:#d4f4dd;color:#0b5313 }
+  .status-aguardando{ background:#fff3cd;color:#664d03 }
+  .status-finalizado{ background:#d5e8f7;color:#063977 }
+  .veiculo-info{ display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;font-size:13px;padding-bottom:16px;border-bottom:1px solid var(--hair) }
+  .info-item strong{ display:block;color:#6b7683;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px }
+  .viagem-item{ background:#f9fafb;border-radius:8px;padding:12px;margin-bottom:8px;font-size:13px }
+  .viagem-item strong{ color:#2a3f86 }
+  .viagem-item .paradas-list{ margin-top:8px;padding-top:8px;border-top:1px solid var(--hair);font-size:12px }
+  .parada{ display:flex;justify-content:space-between;color:#6b7683;margin:4px 0 }
+  .cobranca-item{ background:#f9fafb;border-radius:8px;padding:12px;margin-bottom:8px;font-size:13px }
+  .cobranca-item.aberta{ border-left:3px solid #ff9800 }
+  .cobranca-item.paga{ border-left:3px solid #4caf50 }
+  @media(max-width:768px){
+    .veiculo-info{ grid-template-columns:1fr }
+    .content{ padding:16px }
+  }
+</style>
+</head>
+<body>
+<div class="prop-header">
+  <h1>🔑 Meus Veículos</h1>
+  <div class="subtitle">Acompanhamento em Tempo Real</div>
+  <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center">
+    <div style="font-size:13px;color:#b0c4f0">Logado como: <strong id="userNameTop" style="color:#fff"></strong></div>
+    <button class="btn ghost" id="logoutBtn" style="color:#b0c4f0;border-color:#b0c4f0;padding:6px 12px;font-size:12px">Sair</button>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <div class="tab active" data-tab="operacao">📍 Operação do Dia</div>
+  <div class="tab" data-tab="historico">📅 Histórico</div>
+  <div class="tab" data-tab="penalidades">⚠️ Penalidades</div>
+  <div class="tab" data-tab="financeiro">💰 Financeiro</div>
+</div>
+
+<div class="content">
+
+  <!-- OPERAÇÃO DO DIA -->
+  <div class="panel active" id="operacao">
+    <h2>Status Atual</h2>
+    <div style="margin-bottom:20px">
+      <label style="display:block;font-weight:700;font-size:14px;margin-bottom:8px">Selecione a Data</label>
+      <input type="date" id="dataOp" style="padding:10px 12px;border:1px solid var(--hair);border-radius:8px;max-width:200px">
+    </div>
+
+    <div id="veiculosOpList" style="max-height:600px;overflow-y:auto"></div>
+  </div>
+
+  <!-- HISTÓRICO -->
+  <div class="panel" id="historico">
+    <h2>Histórico de Viagens</h2>
+    <div style="margin-bottom:20px">
+      <label style="display:block;font-weight:700;font-size:14px;margin-bottom:8px">Mês</label>
+      <input type="month" id="mesHistorico" style="padding:10px 12px;border:1px solid var(--hair);border-radius:8px;max-width:200px">
+    </div>
+    <div id="historicoList" style="max-height:600px;overflow-y:auto"></div>
+  </div>
+
+  <!-- PENALIDADES -->
+  <div class="panel" id="penalidades">
+    <h2>Penalidades Registradas</h2>
+    <p style="color:#6b7683;font-size:14px">Ocorrências e penalidades aplicadas por atraso ou irregularidade.</p>
+    <div id="penalList" style="margin-top:16px;max-height:500px;overflow-y:auto"></div>
+  </div>
+
+  <!-- FINANCEIRO -->
+  <div class="panel" id="financeiro">
+    <h2>Situação Financeira</h2>
+    
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:32px">
+      <div style="background:#e8f5e9;border-radius:12px;padding:16px;text-align:center">
+        <div style="font-size:28px;font-weight:900;color:#2e7d32">R$ <span id="totalPago">0</span></div>
+        <div style="font-size:12px;color:#558b2f;margin-top:8px;text-transform:uppercase;letter-spacing:.5px;font-weight:700">Pago</div>
+      </div>
+      <div style="background:#fff3e0;border-radius:12px;padding:16px;text-align:center">
+        <div style="font-size:28px;font-weight:900;color:#e65100">R$ <span id="totalAberto">0</span></div>
+        <div style="font-size:12px;color:#bf360c;margin-top:8px;text-transform:uppercase;letter-spacing:.5px;font-weight:700">Em Aberto</div>
+      </div>
+      <div style="background:#f3e5f5;border-radius:12px;padding:16px;text-align:center">
+        <div style="font-size:28px;font-weight:900;color:#6a1b9a">R$ <span id="totalMes">0</span></div>
+        <div style="font-size:12px;color:#880e4f;margin-top:8px;text-transform:uppercase;letter-spacing:.5px;font-weight:700">Este Mês</div>
+      </div>
+    </div>
+
+    <h3>Cobranças Ativas</h3>
+    <div id="cobrancasList" style="max-height:400px;overflow-y:auto"></div>
+  </div>
+
+</div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+requireLogin();
+const user = getUser();
+$("#userNameTop").textContent = user.nome;
+
+// Tabs
+$$("#tab .tab").forEach(tab => {
+  tab.onclick = () => {
+    $$("#tab .tab").forEach(x => x.classList.remove("active"));
+    tab.classList.add("active");
+    const tabId = tab.dataset.tab;
+    $$(".panel").forEach(p => p.classList.remove("active"));
+    $(`#${tabId}`).classList.add("active");
+  };
+});
+
+// Set today by default
+$("#dataOp").valueAsDate = new Date();
+const thisMonth = new Date().toISOString().slice(0, 7);
+$("#mesHistorico").value = thisMonth;
+
+// Load operação do dia
+$("#dataOp").oninput = async () => {
+  const date = $("#dataOp").value;
+  const fila = await FILA.build(date, ROTA_PADRAO);
+  const meusFila = fila.filter(v => v.veiculoId.startsWith(`${user.id}_`));
+  
+  if(!meusFila.length) {
+    $("#veiculosOpList").innerHTML = "<p style='color:#6b7683'>Nenhum veículo escalado para hoje.</p>";
+    return;
+  }
+
+  $("#veiculosOpList").innerHTML = meusFila.map(v => {
+    const primParada = v.paradas[0];
+    const ultParada = v.paradas[v.paradas.length-1];
+    const status = v.status || "Aguardando saída";
+    
+    return `
+      <div class="veiculo-card">
+        <div class="veiculo-header">
+          <h3>${esc(v.veiculoId)}</h3>
+          <span class="veiculo-status status-${status.replace(/\s+/g, '').toLowerCase()}">${status}</span>
+        </div>
+        <div class="veiculo-info">
+          <div>
+            <strong>Saída Prevista</strong>
+            ${primParada?.previsto || "---"}
+          </div>
+          <div>
+            <strong>Motorista</strong>
+            Dados carregando...
+          </div>
+          <div>
+            <strong>Cobrador</strong>
+            Dados carregando...
+          </div>
+        </div>
+        <div style="font-size:13px;margin-top:12px">
+          <strong>Rota Completa</strong>
+          <div class="paradas-list">
+            ${v.paradas.map((p, pi) => `
+              <div class="parada">
+                <span>${pi+1}. ${esc(p.nome)}</span>
+                <strong>${p.previsto}</strong>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+};
+
+// Histórico de viagens
+$("#mesHistorico").oninput = async () => {
+  const mes = $("#mesHistorico").value;
+  const filas = await DB.all(`fila_${mes.slice(0, 7)}`);
+  const minhas = filas.filter(f => f.veiculoId.includes(user.id));
+  
+  $("#historicoList").innerHTML = minhas.map(f => 
+    `<div class="viagem-item">
+      <strong>${esc(f.veiculoId)}</strong> · ${f.paradas[0]?.previsto || "---"} → ${f.paradas[f.paradas.length-1]?.previsto || "---"}
+      <div class="paradas-list">
+        Status: <span style="color:#2a3f86;font-weight:700">${f.status || "---"}</span>
+      </div>
+    </div>`
+  ).join("") || "<p style='color:#6b7683'>Nenhuma viagem neste mês.</p>";
+};
+
+// Penalidades
+(async () => {
+  const todas = await DB.all("penalidades");
+  const minhas = todas.filter(p => p.veiculoId && p.veiculoId.includes(user.id));
+  
+  $("#penalList").innerHTML = minhas.map(p => 
+    `<div style="background:#fff3cd;border-radius:8px;padding:12px;margin-bottom:8px;font-size:13px;border-left:3px solid #ff9800">
+      <strong>${esc(p.veiculoId)}</strong> · ${esc(p.motivo)}<br>
+      <small style="color:#664d03">Posições: ${p.posicoes} · ${new Date(p.ts).toLocaleString("pt-BR")}</small>
+    </div>`
+  ).join("") || "<p style='color:#6b7683'>Nenhuma penalidade registrada.</p>";
+})();
+
+// Financeiro
+(async () => {
+  const cobrancas = await DB.all("cobrancas");
+  const minhas = cobrancas.filter(c => c.cooperadoId === user.id);
+  
+  const pagas = minhas.filter(c => c.situacao === "Paga").reduce((sum, c) => sum + c.valor, 0);
+  const abertas = minhas.filter(c => c.situacao === "Aberta").reduce((sum, c) => sum + c.valor, 0);
+  const mesMes = minhas.filter(c => c.referencia?.startsWith(thisMonth)).reduce((sum, c) => sum + c.valor, 0);
+  
+  $("#totalPago").textContent = pagas.toFixed(2);
+  $("#totalAberto").textContent = abertas.toFixed(2);
+  $("#totalMes").textContent = mesMes.toFixed(2);
+  
+  $("#cobrancasList").innerHTML = minhas.map(c => 
+    `<div class="cobranca-item ${c.situacao.toLowerCase()}">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <strong>${esc(c.referencia || "---")}</strong>
+        <span style="font-weight:700">R$ ${c.valor.toFixed(2)}</span>
+      </div>
+      <div style="color:#6b7683;font-size:12px">
+        ${c.situacao === "Paga" ? `✓ Pago em ${new Date(c.pagoEm).toLocaleDateString("pt-BR")}` : `Vencimento: ${new Date(c.vencimento).toLocaleDateString("pt-BR")}`}
+      </div>
+    </div>`
+  ).join("");
+})();
+
+// Logout
+$("#logoutBtn").onclick = () => { logout(); location.href = "login.html"; };
+
+// Trigger load
+$("#dataOp").dispatchEvent(new Event("input"));
+$("#mesHistorico").dispatchEvent(new Event("input"));
+</script>
+</body>
+</html>

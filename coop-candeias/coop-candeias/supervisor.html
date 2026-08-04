@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Supervisor · Cooperativa</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <div><div class="eyebrow">Painel do supervisor</div><h1>Operação</h1></div>
+    <div><input type="date" id="date" class="input" style="width:auto"></div>
+  </div>
+
+  <div class="board">
+    <div class="board-h"><span>Fila de saídas</span><span class="live"><i></i>ao vivo</span></div>
+    <div id="board"></div>
+  </div>
+
+  <div class="grid g-2 mt">
+    <div class="card">
+      <div class="card-h"><h3>Resumo do dia</h3></div>
+      <div class="card-b" id="resumo"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><h3>Últimas ações</h3></div>
+      <div class="card-b" id="acoes"></div>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+let DATE=T.today(), VEIC=[], PES=[];
+
+boot("supervisor.html", async ()=>{
+  requireLogin();
+  const user = getUser();
+  if(user.tipo !== "Supervisor") { toast("Acesso apenas para supervisores","stop"); logout(); return; }
+
+  $("#date").value = DATE;
+  $("#date").onchange = e => { DATE = e.target.value; refresh(); };
+  await load(); refresh();
+});
+
+async function load(){
+  [VEIC, PES] = await Promise.all([DB.all("veiculos"), DB.all("pessoas")]);
+}
+
+async function refresh(){
+  const fila = (await FILA.get(DATE)).sort((a,b) => a.ordem - b.ordem);
+  const nowM = T.now();
+  
+  // Board
+  const firstWaiting = fila.find(f => f.status === "aguardando");
+  $("#board").innerHTML = fila.length 
+    ? fila.map(f => {
+      const v = vById(f.veiculoId);
+      const late = f.status==="aguardando" && T.toMin(f.previsto) < nowM - COOP.TOLERANCIA_MIN;
+      const isNext = firstWaiting && f.id === firstWaiting.id;
+      let statusHtml = f.status==="saiu" ? '<span class="chip brand"><i></i>Saiu</span>'
+        : late ? '<span class="chip stop"><i></i>Atrasado</span>'
+        : '<span class="chip go"><i></i>No horário</span>';
+      return `<div class="board-row ${isNext?'next':''}">
+        <span class="ord">${f.ordem}</span>
+        <div><div class="pfx">${esc(v.prefixo||"?")}</div>
+          <div class="who">${esc(v.modelo||"")} · ${esc(nameOf(PES,v.motoristaId))}</div></div>
+        <div class="time">${f.previsto}<small>PREVISTO</small></div>
+        <div class="time">${f.real||"—"}<small>REAL</small></div>
+        <div class="right">${statusHtml}</div>
+      </div>`;
+    }).join("")
+    : `<div class="board-empty">Sem fila para ${DATE}.</div>`;
+
+  // Resumo
+  const saidas = fila.filter(f => f.status==="saiu").length;
+  const atrasos = fila.filter(f => f.status==="aguardando" && T.toMin(f.previsto) < nowM - COOP.TOLERANCIA_MIN).length;
+  const [pens, subs] = await Promise.all([
+    DB.all("penalidades").then(l => l.filter(p => p.data === DATE)),
+    DB.all("substituicoes").then(l => l.filter(s => s.data === DATE))
+  ]);
+  $("#resumo").innerHTML = `
+    <div class="list-row"><span>Saídas registradas</span><b>${saidas}/${fila.length}</b></div>
+    <div class="list-row"><span>Atrasos</span><b class="num">${atrasos}</b></div>
+    <div class="list-row"><span>Penalidades</span><b class="num">${pens.length}</b></div>
+    <div class="list-row"><span>Substituições</span><b class="num">${subs.length}</b></div>`;
+
+  // Ações recentes
+  const acoes = [
+    ...pens.map(p => ({t: p.ts, tipo: "Penalidade", desc: `${vById(p.veiculoId).prefixo||"?"} desceu ${p.posicoes} posições`, cls: "stop"})),
+    ...subs.map(s => ({t: s.ts, tipo: "Substituição", desc: `${vById(s.saiuId).prefixo||"?"} → ${vById(s.entrouId).prefixo||"?"}`, cls: "brand"}))
+  ].sort((a,b) => b.t - a.t).slice(0,5);
+  $("#acoes").innerHTML = acoes.length
+    ? acoes.map(a => `<div class="list-row">
+      <div><span class="chip ${a.cls}"><i></i>${a.tipo}</span><div style="font-size:12px;margin-top:4px">${esc(a.desc)}</div></div>
+      <span style="font-size:11px;color:#6b7683">${new Date(a.t).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</span>
+      </div>`).join("")
+    : `<div class="table-empty">Nenhuma ação registrada.</div>`;
+}
+
+function vById(id){ return VEIC.find(v=>v.id===id)||{}; }
+</script>
+</body>
+</html>

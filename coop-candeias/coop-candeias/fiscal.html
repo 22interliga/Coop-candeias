@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Fiscal · Cooperativa</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .fila-visual{ display:grid; grid-template-columns:60px 1fr 80px; gap:12px; align-items:center; padding:12px; border:1px solid var(--hair); border-radius:8px; margin-bottom:8px; cursor:pointer; transition:.2s }
+  .fila-visual:hover{ background:#f7f8fa; border-color:#2a3f86 }
+  .fila-visual.processing{ opacity:.6; pointer-events:none }
+  .fila-num{ font-size:20px; font-weight:800; color:#2a3f86; text-align:center }
+  .fila-info h4{ margin:0 0 4px 0; font-size:14px; font-weight:700 }
+  .fila-info p{ margin:0; font-size:12px; color:#6b7683 }
+  .btn-group{ display:flex; gap:6px }
+  .btn-group button{ flex:1; padding:8px 10px; font-size:12px }
+  .camera-preview{ max-width:200px; border-radius:8px; margin:8px 0 }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <div><div class="eyebrow">Acompanhamento</div><h1>Fiscalização</h1></div>
+    <div><input type="date" id="date" class="input" style="width:auto"></div>
+  </div>
+
+  <div class="seg">
+    <button class="active" data-tab="fila">Fila do dia</button>
+    <button data-tab="historico">Histórico <i id="histN" style="margin-left:6px;font-weight:700"></i></button>
+  </div>
+
+  <!-- TAB: FILA -->
+  <div id="fila" class="tab active">
+    <div class="card">
+      <div class="card-h"><h3>Linha de saída</h3></div>
+      <div class="card-b" id="filaList"></div>
+    </div>
+  </div>
+
+  <!-- TAB: HISTÓRICO -->
+  <div id="historico" class="tab" style="display:none">
+    <div class="card">
+      <div class="card-h"><h3>Registros do dia</h3></div>
+      <div class="card-b" id="histList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal" style="display:none">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="modalTitulo"></h2>
+      <button onclick="closeModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#6b7683">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:16px">
+        <label><strong>Hora</strong></label>
+        <input type="time" id="inHora" class="input">
+      </div>
+      <div style="margin-bottom:16px">
+        <label><strong>Observações</strong></label>
+        <textarea id="inObs" class="input" style="resize:vertical; height:80px"></textarea>
+      </div>
+      <div style="margin-bottom:16px">
+        <label><input type="checkbox" id="inIrregular"> Registrar como irregularidade</label>
+      </div>
+      <div id="irregDiv" style="display:none; margin-bottom:16px">
+        <label><strong>Tipo de irregularidade</strong></label>
+        <select id="inIrregTipo" class="input">
+          <option value="">Escolha...</option>
+          <option value="Excesso de passageiros">Excesso de passageiros</option>
+          <option value="Falta de documentação">Falta de documentação</option>
+          <option value="Veículo danificado">Veículo danificado</option>
+          <option value="Motorista fora do horário">Motorista fora do horário</option>
+          <option value="Outro">Outro</option>
+        </select>
+      </div>
+      <div style="margin-bottom:16px">
+        <label><strong>Foto da parada</strong></label>
+        <div style="display:flex; gap:8px">
+          <button class="btn primary" onclick="captureFoto()">📷 Capturar</button>
+        </div>
+        <img id="fotoPreview" class="camera-preview" style="display:none">
+      </div>
+      <div style="display:flex; gap:8px">
+        <button class="btn primary" onclick="confirmarParada()">Confirmar</button>
+        <button class="btn ghost" onclick="closeModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+requireLogin();
+const user = getUser();
+
+let DATE = T.today(), VEIC = [], PES = [], ROTA = null, FILA_DATA = [];
+let mFotoData = null, currentVeicId = "", currentParada = null, currentParadaIdx = 0;
+
+$("#date").valueAsDate = new Date();
+$("#date").onchange = () => { DATE = $("#date").value; refresh(); };
+
+$$(".seg button").forEach(btn => {
+  btn.onclick = () => {
+    $$(".seg button").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const tab = btn.dataset.tab;
+    $$(".tab").forEach(t => t.style.display = "none");
+    $(`#${tab}`).style.display = "block";
+    refresh();
+  };
+});
+
+async function load(){
+  const [veic, pes, rota, fila] = await Promise.all([
+    DB.all("veiculos"),
+    DB.all("pessoas"),
+    DB.get("rotas", COOP.ROTA_PADRAO),
+    FILA.get(DATE)
+  ]);
+  VEIC = veic;
+  PES = pes;
+  ROTA = rota;
+  FILA_DATA = fila;
+}
+
+async function refresh(){
+  await load();
+  const nowM = T.now();
+  
+  if(!FILA_DATA.length){
+    $("#filaList").innerHTML = `<div class="table-empty">Sem fila para ${DATE}.</div>`;
+    return;
+  }
+
+  let html = "";
+  FILA_DATA.forEach((f, idx) => {
+    const v = VEIC.find(x=>x.id===f.veiculoId)||{};
+    const mot = nameOf(PES, v.motoristaId);
+    const primeiraParada = f.paradas?.[0];
+    
+    let statusChip = `<span class="chip go"><i></i>Aguardando</span>`;
+    if(primeiraParada?.real) statusChip = `<span class="chip brand"><i></i>Saiu</span>`;
+    else if(primeiraParada && T.toMin(primeiraParada.previsto) < nowM - COOP.TOLERANCIA_MIN){
+      statusChip = `<span class="chip stop"><i></i>Atrasado</span>`;
+    }
+
+    html += `<div class="fila-visual" onclick="openParadaModal('${f.veiculoId}', 0, 'Registrar saída')">
+      <div class="fila-num">#${f.filaPosicao}</div>
+      <div class="fila-info">
+        <h4>${esc(v.prefixo)} · ${esc(v.modelo)}</h4>
+        <p>${esc(mot)} · ${primeiraParada?.previsto || "—"}</p>
+      </div>
+      <div>${statusChip}</div>
+    </div>`;
+  });
+
+  $("#filaList").innerHTML = html;
+}
+
+function openParadaModal(veicId, paradaIdx, titulo){
+  currentVeicId = veicId;
+  currentParadaIdx = paradaIdx;
+  currentParada = null;
+
+  const filaRow = FILA_DATA.find(f => f.veiculoId === veicId);
+  if(!filaRow) return toast("Veículo não encontrado na fila","stop");
+
+  currentParada = filaRow.paradas[paradaIdx];
+  if(!currentParada) return toast("Parada não encontrada","stop");
+
+  const v = VEIC.find(x=>x.id===veicId)||{};
+  const mot = nameOf(PES, v.motoristaId);
+
+  $("#modalTitulo").textContent = titulo;
+  $("#inHora").value = T.now();
+  $("#inObs").value = "";
+  $("#inIrregular").checked = false;
+  $("#irregDiv").style.display = "none";
+  mFotoData = null;
+  $("#fotoPreview").style.display = "none";
+
+  $("#modal").style.display = "flex";
+}
+
+function closeModal(){
+  $("#modal").style.display = "none";
+}
+
+function captureFoto(){
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.capture = "environment";
+  input.onchange = (ev) => {
+    const f = ev.target.files[0];
+    if(!f) return;
+    const r = new FileReader();
+    r.onload = (ev2) => {
+      mFotoData = ev2.target.result;
+      const img = $("#fotoPreview");
+      img.src = mFotoData;
+      img.style.display = "block";
+    };
+    r.readAsDataURL(f);
+  };
+  input.click();
+}
+
+$("#inIrregular").onchange = () => {
+  $("#irregDiv").style.display = $("#inIrregular").checked ? "block" : "none";
+};
+
+async function confirmarParada(){
+  const hora = $("#inHora").value;
+  const obs = $("#inObs").value;
+  const eIrregular = $("#inIrregular").checked;
+  const irregTipo = $("#inIrregTipo").value;
+  
+  if(!hora) return toast("Preencha o horário","stop");
+
+  const v = VEIC.find(x=>x.id===currentVeicId)||{};
+  const eAtraso = T.toMin(hora) > T.toMin(currentParada.previsto) + COOP.TOLERANCIA_MIN;
+
+  const reg = {
+    id: DB.uid(),
+    data: DATE,
+    tipo: currentParada.ordem === 1 ? "saida" : currentParada.ordem === (FILA_DATA.find(f=>f.veiculoId===currentVeicId).paradas||[]).length ? "destino" : "parada",
+    parada: currentParada.parada,
+    veiculoId: currentVeicId,
+    prefixo: v.prefixo,
+    fiscalId: user.id,
+    hora: hora,
+    obs: obs,
+    irregular: eIrregular,
+    irregTipo: irregTipo,
+    foto: mFotoData ? mFotoData.substring(0, 50000) : null,
+    atraso: eAtraso,
+    ts: new Date().toISOString()
+  };
+
+  await DB.put("fiscalizacoes", reg);
+  logAuditAction("Fiscalização registrada", `${v.prefixo} - ${currentParada.nome}`);
+
+  const filaRow = FILA_DATA.find(f => f.veiculoId === currentVeicId);
+  if(filaRow) {
+    filaRow.paradas[currentParadaIdx].real = hora;
+    if(!filaRow.paradas[currentParadaIdx].registros) filaRow.paradas[currentParadaIdx].registros = [];
+    filaRow.paradas[currentParadaIdx].registros.push(reg.id);
+    await FILA.saveRow(DATE, filaRow);
+  }
+
+  if(eAtraso) {
+    const pena = {
+      id: DB.uid(),
+      data: DATE,
+      veiculoId: currentVeicId,
+      posicoes: 1,
+      motivo: "Atraso detectado pelo fiscal",
+      supervisorId: user?.id || "",
+      ts: Date.now()
+    };
+    await DB.put("penalidades", pena);
+    await FILA.aplicarPenalidade(DATE, currentVeicId, 1);
+    logAuditAction("Penalidade aplicada", `${v.prefixo} - atraso detectado`);
+    toast("Atraso detectado! Penalidade aplicada: -1 posição","warn");
+  } else {
+    toast("Parada registrada","go");
+  }
+
+  closeModal();
+  refresh();
+}
+
+(async () => {
+  await load();
+  refresh();
+})();
+</script>
+</body>
+</html>

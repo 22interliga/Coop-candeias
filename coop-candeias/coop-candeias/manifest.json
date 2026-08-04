@@ -1,0 +1,12 @@
+{
+  "name": "Cooperativa de Transporte",
+  "short_name": "COOP",
+  "description": "Gestão operacional da cooperativa — Candeias ↔ Madre de Deus",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#101826",
+  "theme_color": "#101826",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
