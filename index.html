@@ -286,9 +286,9 @@ const user = getUser();
 $("#userNameTop").textContent = user.nome;
 
 // Sidebar navigation
-$$("#tab .sidebar-item").forEach(item => {
+$$(".sidebar-item").forEach(item => {
   item.onclick = () => {
-    $$("#tab .sidebar-item").forEach(x => x.classList.remove("active"));
+    $$(".sidebar-item").forEach(x => x.classList.remove("active"));
     item.classList.add("active");
     const tab = item.dataset.tab;
     $$(".panel").forEach(p => p.classList.remove("active"));

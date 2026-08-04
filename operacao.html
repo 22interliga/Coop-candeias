@@ -179,7 +179,7 @@ $("#loadFilaBtn").onclick = async () => {
   if(!date) { toast("Escolha uma data","stop"); return; }
   currentFila = await FILA.build(date, COOP.ROTA_PADRAO);
   renderFila(currentFila);
-  $("#intervaloInput").value = (await getConfig()).INTERVALO_MIN;
+  $("#intervaloInput").value = COOP.INTERVALO_MIN;
 };
 
 function renderFila(fila) {
