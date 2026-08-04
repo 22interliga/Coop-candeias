@@ -61,7 +61,6 @@
         <input type="date" id="opDate" style="padding:10px 12px;border:1px solid var(--hair);border-radius:8px">
       </div>
       <button class="btn primary" id="loadFilaBtn">Carregar Fila</button>
-      <button class="btn ghost" id="saveFilaBtn" style="display:none">💾 Salvar Alterações</button>
     </div>
 
     <div id="filaContainer" style="max-height:500px;overflow-y:auto"></div>
@@ -81,20 +80,30 @@
 
   <!-- ESCALAS -->
   <div class="panel" id="escalas">
-    <h2>Escalas Programadas</h2>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:24px">
-      <div>
-        <h3>Escala Semanal</h3>
-        <div style="background:#f9fafb;border-radius:8px;padding:16px;font-size:13px;color:#6b7683">
-          🗓️ Visualização de escalas por dia da semana e veículo.
-        </div>
-      </div>
-      <div>
-        <h3>Escala por Veículo</h3>
-        <div style="background:#f9fafb;border-radius:8px;padding:16px;font-size:13px;color:#6b7683">
-          🚗 Visualização de escalas de cada veículo (motorista + cobrador).
-        </div>
-      </div>
+    <h2>Escala Semanal</h2>
+    <p style="color:#6b7683;font-size:14px;margin-bottom:24px">Edite o motorista e cobrador para cada veículo nos dias da semana.</p>
+    
+    <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--hair)">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f4f5f7;border-bottom:2px solid var(--hair)">
+            <th style="padding:12px;text-align:left;font-weight:700;color:#2a3f86">Veículo</th>
+            <th style="padding:12px;text-align:center;font-weight:700;color:#2a3f86">SEG</th>
+            <th style="padding:12px;text-align:center;font-weight:700;color:#2a3f86">TER</th>
+            <th style="padding:12px;text-align:center;font-weight:700;color:#2a3f86">QUA</th>
+            <th style="padding:12px;text-align:center;font-weight:700;color:#2a3f86">QUI</th>
+            <th style="padding:12px;text-align:center;font-weight:700;color:#2a3f86">SEX</th>
+            <th style="padding:12px;text-align:center;font-weight:700;color:#2a3f86">SAB</th>
+            <th style="padding:12px;text-align:center;font-weight:700;color:#2a3f86">DOM</th>
+          </tr>
+        </thead>
+        <tbody id="escalaMatriz"></tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:24px;display:flex;gap:12px">
+      <button class="btn primary" id="salvarEscalaBtn">💾 Salvar Escala</button>
+      <button class="btn ghost" id="cancelarEscalaBtn">Cancelar</button>
     </div>
   </div>
 
@@ -149,10 +158,9 @@ requireLogin();
 const user = getUser();
 $("#userNameTop").textContent = user.nome;
 
-// Set today's date by default
 $("#opDate").valueAsDate = new Date();
 
-// Tabs
+// TABS
 $$("#tab .tab").forEach(tab => {
   tab.onclick = () => {
     $$("#tab .tab").forEach(x => x.classList.remove("active"));
@@ -163,14 +171,14 @@ $$("#tab .tab").forEach(tab => {
   };
 });
 
-// Load fila
+// FILA
 let currentFila = [];
+
 $("#loadFilaBtn").onclick = async () => {
   const date = $("#opDate").value;
   if(!date) { toast("Escolha uma data","stop"); return; }
-  currentFila = await FILA.build(date, ROTA_PADRAO);
+  currentFila = await FILA.build(date, COOP.ROTA_PADRAO);
   renderFila(currentFila);
-  $("#saveFilaBtn").style.display = "inline-block";
   $("#intervaloInput").value = (await getConfig()).INTERVALO_MIN;
 };
 
@@ -198,20 +206,102 @@ function renderFila(fila) {
   }).join("");
 }
 
-// Recalc fila
 $("#recalcFilaBtn").onclick = async () => {
   const date = $("#opDate").value;
   const intervalo = parseInt($("#intervaloInput").value);
   if(!intervalo) { toast("Digite o intervalo","stop"); return; }
   
-  currentFila = await FILA.build(date, ROTA_PADRAO);
+  currentFila = await FILA.build(date, COOP.ROTA_PADRAO);
   currentFila = await FILA.reindex(date, currentFila, intervalo);
   renderFila(currentFila);
   logAuditAction("Recalcular fila", `intervalo: ${intervalo}min`);
   toast("Fila recalculada");
 };
 
-// Substituições
+// ESCALAS
+async function renderEscalaMatriz() {
+  const veiculos = await DB.all("veiculos");
+  const pessoas = await DB.all("pessoas");
+  
+  let html = "";
+  
+  for(const v of veiculos) {
+    html += `<tr style="border-bottom:1px solid var(--hair)">
+      <td style="padding:12px;font-weight:700;background:#f9fafb">${esc(v.prefixo)}<br><small style="color:#6b7683;font-weight:400">${esc(v.placa)}</small></td>`;
+    
+    for(let dia = 0; dia < 7; dia++) {
+      const escalaDia = v.escalaDias ? v.escalaDias[dia] : null;
+      const ativo = Array.isArray(v.escalaDias) && v.escalaDias[dia] !== undefined && v.escalaDias[dia] !== false;
+      
+      html += `<td style="padding:8px;text-align:center;background:${ativo ? '#e8f5e9' : '#fafafa'}">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <select data-veiculo="${v.id}" data-dia="${dia}" data-tipo="motorista" style="padding:4px;font-size:11px;border:1px solid var(--hair);border-radius:4px">
+            <option value="">---</option>
+            ${pessoas.filter(p => p.tipo === "Motorista").map(p => `<option value="${p.id}" ${escalaDia?.motoristaId === p.id ? 'selected' : ''}>${p.nome.split(' ')[0]}</option>`).join('')}
+          </select>
+          <select data-veiculo="${v.id}" data-dia="${dia}" data-tipo="cobrador" style="padding:4px;font-size:11px;border:1px solid var(--hair);border-radius:4px">
+            <option value="">---</option>
+            ${pessoas.filter(p => p.tipo === "Motorista").map(p => `<option value="${p.id}" ${escalaDia?.cobradorId === p.id ? 'selected' : ''}>${p.nome.split(' ')[0]}</option>`).join('')}
+          </select>
+          <label style="font-size:11px;display:flex;align-items:center;justify-content:center;gap:4px">
+            <input type="checkbox" data-veiculo="${v.id}" data-dia="${dia}" data-tipo="ativo" ${ativo ? 'checked' : ''}>
+            Ativo
+          </label>
+        </div>
+      </td>`;
+    }
+    
+    html += `</tr>`;
+  }
+  
+  $("#escalaMatriz").innerHTML = html;
+}
+
+$("#salvarEscalaBtn").onclick = async () => {
+  const veiculos = await DB.all("veiculos");
+  
+  for(const v of veiculos) {
+    const escalaDias = [];
+    
+    for(let dia = 0; dia < 7; dia++) {
+      const ativoInput = $(`input[data-veiculo="${v.id}"][data-dia="${dia}"][data-tipo="ativo"]`);
+      const ativo = ativoInput?.checked;
+      
+      if(ativo) {
+        const motoristaSelect = $(`select[data-veiculo="${v.id}"][data-dia="${dia}"][data-tipo="motorista"]`);
+        const cobradorSelect = $(`select[data-veiculo="${v.id}"][data-dia="${dia}"][data-tipo="cobrador"]`);
+        
+        escalaDias[dia] = {
+          motoristaId: motoristaSelect?.value || "",
+          cobradorId: cobradorSelect?.value || ""
+        };
+      }
+    }
+    
+    v.escalaDias = escalaDias;
+    await DB.put("veiculos", v);
+  }
+  
+  logAuditAction("Escala semanal alterada", JSON.stringify({veiculos: veiculos.length}));
+  toast("Escala salva! Recalculando filas...");
+  
+  const hoje = new Date();
+  for(let i = 0; i < 7; i++) {
+    const data = new Date(hoje);
+    data.setDate(data.getDate() + i);
+    const dateStr = data.toISOString().split("T")[0];
+    await FILA.build(dateStr, COOP.ROTA_PADRAO);
+  }
+  
+  toast("Filas recalculadas com sucesso!");
+  renderEscalaMatriz();
+};
+
+$("#cancelarEscalaBtn").onclick = () => renderEscalaMatriz();
+
+renderEscalaMatriz();
+
+// SUBSTITUIÇÕES
 (async () => {
   const veiculos = await DB.all("veiculos");
   const selSai = $("#subVeiculoSai");
@@ -248,11 +338,9 @@ $("#confirmSubBtn").onclick = async () => {
   $("#subVeiculoEntra").value = "";
   $("#subMotivo").value = "";
   
-  // Reload fila
   await $("#loadFilaBtn").click();
 };
 
-// Load substituições
 (async () => {
   const date = $("#opDate").value;
   const subs = await DB.all("substituicoes");
@@ -265,7 +353,6 @@ $("#confirmSubBtn").onclick = async () => {
   ).join("");
 })();
 
-// Load penalidades
 (async () => {
   const date = $("#opDate").value;
   const pens = await DB.all("penalidades");
@@ -278,7 +365,6 @@ $("#confirmSubBtn").onclick = async () => {
   ).join("") || "<p style='color:#6b7683'>Nenhuma penalidade registrada.</p>";
 })();
 
-// Logout
 $("#logoutBtn").onclick = () => { logout(); location.href = "login.html"; };
 </script>
 </body>
