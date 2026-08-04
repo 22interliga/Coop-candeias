@@ -12,21 +12,24 @@
   .veic-head{ display:grid; grid-template-columns:80px 1fr 100px; gap:16px; align-items:start; margin-bottom:16px; padding-bottom:12px; border-bottom:2px solid var(--hair) }
   .veic-prefixo{ font-size:28px; font-weight:900; color:#2a3f86; text-align:center; line-height:1 }
   .veic-info h3{ margin:0 0 8px 0; font-size:16px; font-weight:700 }
-  .veic-info .info-row{ display:grid; grid-template-columns:80px 1fr; gap:12px; font-size:13px; margin-bottom:6px }
+  .veic-info .info-row{ display:grid; grid-template-columns:90px 1fr; gap:12px; font-size:13px; margin-bottom:6px; align-items:center }
   .info-label{ color:#6b7683; font-weight:600; text-transform:uppercase; letter-spacing:.5px }
   .info-value{ font-weight:600; color:var(--text) }
   .veic-status{ text-align:center }
   .status-badge{ display:inline-block; padding:6px 12px; border-radius:8px; font-size:12px; font-weight:700; background:#e8f0ff; color:#2a3f86 }
-  .parada-mini{ display:grid; grid-template-columns:40px 1fr 60px; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid #e0e2e7; font-size:12px }
+  .parada-mini{ display:grid; grid-template-columns:40px 1fr 60px 60px; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid #e0e2e7; font-size:12px }
   .parada-mini:last-child{ border-bottom:none }
   .parada-num{ text-align:center; font-weight:700; color:#2a3f86 }
   .parada-name{ font-weight:600; color:var(--text) }
-  .parada-time{ text-align:right; font-family:monospace; font-size:12px }
+  .parada-time{ text-align:center; font-family:monospace; font-size:11px; font-weight:700; color:#6b7683 }
+  .parada-real{ text-align:center; font-family:monospace; font-size:11px; font-weight:700; color:#25c968 }
   .btn-row{ display:flex; gap:6px; margin-top:12px }
   .btn-row button{ flex:1; padding:10px; font-size:12px }
   .intervalo-edit{ display:flex; gap:8px; align-items:center; background:#fff; padding:12px 16px; border-radius:10px; border:1px solid var(--hair); margin-bottom:16px }
   .intervalo-edit input{ flex:0 0 60px; padding:6px 8px; border:1px solid var(--hair); border-radius:6px; text-align:center; font-weight:700 }
-  @media(max-width:768px){ .veic-head{ grid-template-columns:1fr; gap:8px } }
+  .gerador{ text-align:center; padding:40px 20px }
+  .loading{ display:inline-block; padding:12px 24px; border-radius:8px; background:#f0f2f5; color:#6b7683; font-weight:600 }
+  @media(max-width:768px){ .veic-head{ grid-template-columns:1fr; gap:8px } .parada-mini{ grid-template-columns:1fr; gap:4px } }
 </style>
 </head>
 <body>
@@ -113,6 +116,7 @@ let DATE=T.today(), VEIC=[], PES=[], ROTA=null, FILA=[];
 let currentVeicForDoc=null, currentVeicForSub=null;
 
 boot("operacao.html", async ()=>{
+  renderTop("operacao.html");
   requireLogin();
   const user = getUser();
   if(user.tipo !== "Presidente" && user.tipo !== "Administrador"){
@@ -152,7 +156,8 @@ async function salvarIntervalo(){
   const novo = Number($("#intervaloVal").value);
   if(novo < 5 || novo > 60) return toast("Intervalo deve estar entre 5 e 60 min","stop");
   COOP.INTERVALO_MIN = novo;
-  await FILA.reindex(DATE, FILA, novo);
+  const filaAtual = await FILA.get(DATE);
+  await FILA.reindex(DATE, filaAtual, novo);
   toast("Intervalo atualizado para "+novo+" min","go");
   await load();
   refresh();
@@ -162,15 +167,16 @@ async function refresh(){
   await load();
   const nowM = T.now();
 
-  if(!FILA.length || !ROTA){
-    $("#board").innerHTML = `<div class="card"><div class="table-empty">Sem fila para ${DATE}. <button class="btn" onclick="(async()=>{ 
-      const f=await FILA.build(T.today()); toast('Fila gerada','go'); location.reload(); 
-    })()">Gerar fila</button></div></div>`;
+  if(!FILA || !FILA.length || !ROTA){
+    $("#board").innerHTML = `<div class="gerador">
+      <div class="loading">Nenhuma fila gerada para ${DATE}</div>
+      <button class="btn" style="margin-top:16px" onclick="gerarFila()">+ Gerar fila</button>
+    </div>`;
     return;
   }
 
   let html = "";
-  FILA.forEach(f => {
+  FILA.sort((a,b) => a.filaPosicao - b.filaPosicao).forEach(f => {
     const v = VEIC.find(x=>x.id===f.veiculoId)||{};
     const mot = nameOf(PES, v.motoristaId);
     const cob = nameOf(PES, v.cobradorId);
@@ -183,14 +189,14 @@ async function refresh(){
 
     html += `<div class="veic-row">
       <div class="veic-head">
-        <div class="veic-prefixo">${esc(v.prefixo)}</div>
+        <div class="veic-prefixo">${esc(v.prefixo || "?")}</div>
         <div class="veic-info">
-          <h3>${esc(v.modelo)} · ${esc(v.marca)}</h3>
-          <div class="info-row"><span class="info-label">Placa</span><span class="info-value">${esc(v.placa)}</span></div>
+          <h3>${esc(v.modelo || "?")} · ${esc(v.marca || "?")}</h3>
+          <div class="info-row"><span class="info-label">Placa</span><span class="info-value">${esc(v.placa || "?")}</span></div>
           <div class="info-row"><span class="info-label">Motorista</span><span class="info-value">${esc(mot)}</span></div>
           <div class="info-row"><span class="info-label">Cobrador</span><span class="info-value">${esc(cob)}</span></div>
           <div class="info-row"><span class="info-label">Proprietário</span><span class="info-value">${esc(prop)}</span></div>
-          <div class="info-row"><span class="info-label">Documentação</span><span class="info-value">${docChip(v.documentacao)}</span></div>
+          <div class="info-row"><span class="info-label">Documentação</span>${docChip(v.documentacao)}</div>
         </div>
         <div class="veic-status">
           <div class="status-badge">${statusGeral === "completo" ? "✓ Completo" : statusGeral === "em_progresso" ? "Em andamento" : "Aguardando"}</div>
@@ -198,23 +204,33 @@ async function refresh(){
       </div>
 
       <div style="border-top:1px solid #e0e2e7;padding-top:12px">
+        <div style="font-size:11px;font-weight:700;color:#6b7683;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Percurso</div>
         ${(f.paradas||[]).map(p => `
           <div class="parada-mini">
             <div class="parada-num">${p.ordem}</div>
-            <div class="parada-name">${esc(p.nome)}</div>
-            <div class="parada-time">${p.previsto}${p.real ? ` / ${p.real}` : ""}</div>
+            <div class="parada-name">${esc(p.nome || "?")}</div>
+            <div class="parada-time">${p.previsto}</div>
+            <div class="parada-real">${p.real || "—"}</div>
           </div>
         `).join("")}
       </div>
 
       <div class="btn-row">
-        <button class="btn ghost sm" onclick="openDocModal('${v.id}','${esc(v.prefixo)}')">📝 Doc</button>
-        <button class="btn ghost sm" onclick="openSubModal('${v.id}','${esc(v.prefixo)}')">🔄 Sub</button>
+        <button class="btn ghost sm" onclick="openDocModal('${f.veiculoId}','${esc(v.prefixo)}')">📝 Doc</button>
+        <button class="btn ghost sm" onclick="openSubModal('${f.veiculoId}','${esc(v.prefixo)}')">🔄 Sub</button>
       </div>
     </div>`;
   });
 
   $("#board").innerHTML = html;
+}
+
+async function gerarFila(){
+  $("#board").innerHTML = `<div class="gerador"><div class="loading">Gerando fila...</div></div>`;
+  await FILA.build(DATE);
+  toast("Fila gerada com sucesso","go");
+  await load();
+  refresh();
 }
 
 function docChip(doc){
