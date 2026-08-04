@@ -61,7 +61,6 @@
         <input type="date" id="opDate" style="padding:10px 12px;border:1px solid var(--hair);border-radius:8px">
       </div>
       <button class="btn primary" id="loadFilaBtn">Carregar Fila</button>
-      <button class="btn ghost" id="saveFilaBtn" style="display:none">💾 Salvar Alterações</button>
     </div>
 
     <div id="filaContainer" style="max-height:500px;overflow-y:auto"></div>
@@ -82,7 +81,7 @@
   <!-- ESCALAS -->
   <div class="panel" id="escalas">
     <h2>Escala Semanal</h2>
-    <p style="color:#6b7683;font-size:14px;margin-bottom:24px">Edite o motorista e cobrador para cada veículo nos dias da semana. As mudanças recalcularão a fila automaticamente.</p>
+    <p style="color:#6b7683;font-size:14px;margin-bottom:24px">Edite o motorista e cobrador para cada veículo nos dias da semana.</p>
     
     <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--hair)">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -159,10 +158,9 @@ requireLogin();
 const user = getUser();
 $("#userNameTop").textContent = user.nome;
 
-// Set today's date by default
 $("#opDate").valueAsDate = new Date();
 
-// Tabs
+// TABS
 $$("#tab .tab").forEach(tab => {
   tab.onclick = () => {
     $$("#tab .tab").forEach(x => x.classList.remove("active"));
@@ -173,14 +171,14 @@ $$("#tab .tab").forEach(tab => {
   };
 });
 
-// Load fila
+// FILA
 let currentFila = [];
+
 $("#loadFilaBtn").onclick = async () => {
   const date = $("#opDate").value;
   if(!date) { toast("Escolha uma data","stop"); return; }
   currentFila = await FILA.build(date, COOP.ROTA_PADRAO);
   renderFila(currentFila);
-  $("#saveFilaBtn").style.display = "inline-block";
   $("#intervaloInput").value = (await getConfig()).INTERVALO_MIN;
 };
 
@@ -208,7 +206,6 @@ function renderFila(fila) {
   }).join("");
 }
 
-// Recalc fila
 $("#recalcFilaBtn").onclick = async () => {
   const date = $("#opDate").value;
   const intervalo = parseInt($("#intervaloInput").value);
@@ -221,78 +218,7 @@ $("#recalcFilaBtn").onclick = async () => {
   toast("Fila recalculada");
 };
 
-// Substituições
-(async () => {
-  const veiculos = await DB.all("veiculos");
-  const selSai = $("#subVeiculoSai");
-  const selEntra = $("#subVeiculoEntra");
-  veiculos.forEach(v => {
-    selSai.innerHTML += `<option value="${v.id}">${esc(v.prefixo)} (${esc(v.placa)})</option>`;
-    selEntra.innerHTML += `<option value="${v.id}">${esc(v.prefixo)} (${esc(v.placa)})</option>`;
-  });
-})();
-
-$("#confirmSubBtn").onclick = async () => {
-  const saiId = $("#subVeiculoSai").value;
-  const entraId = $("#subVeiculoEntra").value;
-  const motivo = $("#subMotivo").value;
-  
-  if(!saiId || !entraId || !motivo) { toast("Preencha todos os campos","stop"); return; }
-  if(saiId === entraId) { toast("Escolha veículos diferentes","stop"); return; }
-  
-  const date = $("#opDate").value;
-  await DB.put("substituicoes", {
-    id: `sub_${Date.now()}`,
-    data: date,
-    saiuId: saiId,
-    entrouId: entraId,
-    motivo: motivo,
-    supervisorId: user.id,
-    ts: new Date().toISOString()
-  });
-  
-  logAuditAction("Substituição de veículo", `${saiId} → ${entraId} (${motivo})`);
-  toast("Substituição registrada");
-  
-  $("#subVeiculoSai").value = "";
-  $("#subVeiculoEntra").value = "";
-  $("#subMotivo").value = "";
-  
-  // Reload fila
-  await $("#loadFilaBtn").click();
-};
-
-// Load substituições
-(async () => {
-  const date = $("#opDate").value;
-  const subs = await DB.all("substituicoes");
-  const subsDia = subs.filter(s => s.data === date);
-  $("#subHistorico").innerHTML = subsDia.map(s => 
-    `<div style="background:#f9fafb;border-radius:8px;padding:12px;margin-bottom:8px;font-size:13px">
-      <strong>${esc(s.saiuId)}</strong> → <strong>${esc(s.entrouId)}</strong><br>
-      <small style="color:#6b7683">Motivo: ${esc(s.motivo)} · ${new Date(s.ts).toLocaleTimeString("pt-BR")}</small>
-    </div>`
-  ).join("");
-})();
-
-// Load penalidades
-(async () => {
-  const date = $("#opDate").value;
-  const pens = await DB.all("penalidades");
-  const pensDia = pens.filter(p => p.data === date);
-  $("#penalList").innerHTML = pensDia.map(p => 
-    `<div style="background:#fff3cd;border-radius:8px;padding:12px;margin-bottom:8px;font-size:13px">
-      <strong>${esc(p.veiculoId || "---")}</strong> · ${p.motivo}<br>
-      <small style="color:#664d03">Posições: ${p.posicoes} · ${new Date(p.ts).toLocaleTimeString("pt-BR")}</small>
-    </div>`
-  ).join("") || "<p style='color:#6b7683'>Nenhuma penalidade registrada.</p>";
-})();
-
-// ESCALAS SEMANAL
-const DIAS = [1, 2, 3, 4, 5, 6, 0]; // 0=domingo
-const DIAS_NOMES = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"];
-let veiculosEscala = [];
-
+// ESCALAS
 async function renderEscalaMatriz() {
   const veiculos = await DB.all("veiculos");
   const pessoas = await DB.all("pessoas");
@@ -359,7 +285,6 @@ $("#salvarEscalaBtn").onclick = async () => {
   logAuditAction("Escala semanal alterada", JSON.stringify({veiculos: veiculos.length}));
   toast("Escala salva! Recalculando filas...");
   
-  // Recalcula fila pra todos os próximos 7 dias
   const hoje = new Date();
   for(let i = 0; i < 7; i++) {
     const data = new Date(hoje);
@@ -374,10 +299,72 @@ $("#salvarEscalaBtn").onclick = async () => {
 
 $("#cancelarEscalaBtn").onclick = () => renderEscalaMatriz();
 
-// Load escala na primeira vez
 renderEscalaMatriz();
 
-// Logout
+// SUBSTITUIÇÕES
+(async () => {
+  const veiculos = await DB.all("veiculos");
+  const selSai = $("#subVeiculoSai");
+  const selEntra = $("#subVeiculoEntra");
+  veiculos.forEach(v => {
+    selSai.innerHTML += `<option value="${v.id}">${esc(v.prefixo)} (${esc(v.placa)})</option>`;
+    selEntra.innerHTML += `<option value="${v.id}">${esc(v.prefixo)} (${esc(v.placa)})</option>`;
+  });
+})();
+
+$("#confirmSubBtn").onclick = async () => {
+  const saiId = $("#subVeiculoSai").value;
+  const entraId = $("#subVeiculoEntra").value;
+  const motivo = $("#subMotivo").value;
+  
+  if(!saiId || !entraId || !motivo) { toast("Preencha todos os campos","stop"); return; }
+  if(saiId === entraId) { toast("Escolha veículos diferentes","stop"); return; }
+  
+  const date = $("#opDate").value;
+  await DB.put("substituicoes", {
+    id: `sub_${Date.now()}`,
+    data: date,
+    saiuId: saiId,
+    entrouId: entraId,
+    motivo: motivo,
+    supervisorId: user.id,
+    ts: new Date().toISOString()
+  });
+  
+  logAuditAction("Substituição de veículo", `${saiId} → ${entraId} (${motivo})`);
+  toast("Substituição registrada");
+  
+  $("#subVeiculoSai").value = "";
+  $("#subVeiculoEntra").value = "";
+  $("#subMotivo").value = "";
+  
+  await $("#loadFilaBtn").click();
+};
+
+(async () => {
+  const date = $("#opDate").value;
+  const subs = await DB.all("substituicoes");
+  const subsDia = subs.filter(s => s.data === date);
+  $("#subHistorico").innerHTML = subsDia.map(s => 
+    `<div style="background:#f9fafb;border-radius:8px;padding:12px;margin-bottom:8px;font-size:13px">
+      <strong>${esc(s.saiuId)}</strong> → <strong>${esc(s.entrouId)}</strong><br>
+      <small style="color:#6b7683">Motivo: ${esc(s.motivo)} · ${new Date(s.ts).toLocaleTimeString("pt-BR")}</small>
+    </div>`
+  ).join("");
+})();
+
+(async () => {
+  const date = $("#opDate").value;
+  const pens = await DB.all("penalidades");
+  const pensDia = pens.filter(p => p.data === date);
+  $("#penalList").innerHTML = pensDia.map(p => 
+    `<div style="background:#fff3cd;border-radius:8px;padding:12px;margin-bottom:8px;font-size:13px">
+      <strong>${esc(p.veiculoId || "---")}</strong> · ${p.motivo}<br>
+      <small style="color:#664d03">Posições: ${p.posicoes} · ${new Date(p.ts).toLocaleTimeString("pt-BR")}</small>
+    </div>`
+  ).join("") || "<p style='color:#6b7683'>Nenhuma penalidade registrada.</p>";
+})();
+
 $("#logoutBtn").onclick = () => { logout(); location.href = "login.html"; };
 </script>
 </body>
