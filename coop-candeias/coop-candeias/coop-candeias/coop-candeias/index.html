@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Painel Administrativo</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .admin-header{ background:linear-gradient(135deg, #2a3f86 0%, #1a2547 100%);color:#fff;padding:24px }
+  .admin-header h1{ margin:0;font-size:24px }
+  .admin-header .subtitle{ font-size:13px;color:#b0c4f0;margin-top:4px }
+  .admin-layout{ display:grid;grid-template-columns:220px 1fr;gap:0 }
+  .sidebar{ background:#f4f5f7;border-right:1px solid var(--hair);min-height:calc(100vh - 80px);overflow-y:auto }
+  .sidebar-item{
+    padding:16px 20px;border-left:3px solid transparent;cursor:pointer;font-weight:600;
+    color:#6b7683;font-size:14px;transition:.2s
+  }
+  .sidebar-item:hover{ background:#e8eef4;color:var(--text) }
+  .sidebar-item.active{ background:#e8f0ff;border-left-color:#2a3f86;color:#2a3f86 }
+  .main-content{ padding:32px }
+  .dashboard-grid{ display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;margin-bottom:32px }
+  .kpi-card{ background:#fff;border-radius:12px;padding:20px;border:1px solid var(--hair);text-align:center }
+  .kpi-card .number{ font-size:36px;font-weight:900;color:#2a3f86;display:block }
+  .kpi-card .label{ font-size:13px;color:#6b7683;margin-top:8px;text-transform:uppercase;letter-spacing:.5px }
+  .panel{ display:none }
+  .panel.active{ display:block }
+  .form-group{ margin-bottom:20px }
+  .form-group label{ display:block;font-weight:700;font-size:14px;margin-bottom:8px;color:var(--text) }
+  .form-group input, .form-group select{ width:100%;padding:10px 12px;border:1px solid var(--hair);border-radius:8px;font-size:14px }
+  .form-row{ display:grid;grid-template-columns:1fr 1fr;gap:16px }
+  .table-responsive{ overflow-x:auto;border-radius:8px;border:1px solid var(--hair) }
+  .table{ width:100%;border-collapse:collapse;font-size:13px }
+  .table th{ background:#f4f5f7;padding:12px;text-align:left;font-weight:700;border-bottom:1px solid var(--hair) }
+  .table td{ padding:12px;border-bottom:1px solid var(--hair) }
+  .table tbody tr:hover{ background:#f9fafb }
+  .audit-entry{ background:#f9fafb;border-radius:8px;padding:16px;margin-bottom:12px;font-size:13px;border-left:3px solid var(--hair) }
+  .audit-time{ color:#6b7683;font-weight:600 }
+  .audit-action{ color:#2a3f86;font-weight:700;margin:4px 0 }
+  @media(max-width:768px){
+    .admin-layout{ grid-template-columns:1fr }
+    .sidebar{ display:none }
+    .main-content{ padding:16px }
+  }
+</style>
+</head>
+<body>
+<div class="admin-header">
+  <h1>🔐 Painel Administrativo</h1>
+  <div class="subtitle">Cooperativa de Transporte Alternativo</div>
+  <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center">
+    <div style="font-size:13px;color:#b0c4f0">Logado como: <strong id="userNameTop" style="color:#fff"></strong></div>
+    <button class="btn ghost" id="logoutBtn" style="color:#b0c4f0;border-color:#b0c4f0;padding:6px 12px;font-size:12px">Sair</button>
+  </div>
+</div>
+
+<div class="admin-layout">
+  <div class="sidebar">
+    <div class="sidebar-item active" data-tab="dashboard">📊 Dashboard</div>
+    <div class="sidebar-item" data-tab="cadastros">📋 Cadastros</div>
+    <div class="sidebar-item" data-tab="escalas">📅 Escalas</div>
+    <div class="sidebar-item" data-tab="operacao">🎯 Operação do Dia</div>
+    <div class="sidebar-item" data-tab="financeiro">💰 Financeiro</div>
+    <div class="sidebar-item" data-tab="auditoria">🔍 Auditoria</div>
+    <div class="sidebar-item" data-tab="config">⚙️ Configurações</div>
+  </div>
+
+  <div class="main-content">
+
+    <!-- DASHBOARD -->
+    <div class="panel active" id="dashboard">
+      <h2>Dashboard Executivo</h2>
+      <div class="dashboard-grid">
+        <div class="kpi-card"><span class="number" id="kpiVeiculos">0</span><span class="label">Veículos</span></div>
+        <div class="kpi-card"><span class="number" id="kpiMotoristas">0</span><span class="label">Motoristas</span></div>
+        <div class="kpi-card"><span class="number" id="kpiProprietarios">0</span><span class="label">Proprietários</span></div>
+        <div class="kpi-card"><span class="number" id="kpiFiscais">0</span><span class="label">Fiscais</span></div>
+      </div>
+
+      <h3 style="margin-top:32px">Atividade Recente</h3>
+      <div id="recentActivity" style="max-height:400px;overflow-y:auto"></div>
+    </div>
+
+    <!-- CADASTROS -->
+    <div class="panel" id="cadastros">
+      <h2>Cadastros</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:24px">
+        
+        <!-- Veículos -->
+        <div>
+          <h3>Veículos</h3>
+          <button class="btn primary" id="addVeiculoBtn">+ Novo Veículo</button>
+          <div id="veiculosList" style="margin-top:16px"></div>
+          <div id="veiculoModal" class="modal" style="display:none">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="veiculoModalTitle">Novo Veículo</h3>
+                <button class="close-modal">&times;</button>
+              </div>
+              <form id="veiculoForm">
+                <div class="form-group">
+                  <label>Prefixo</label>
+                  <input type="text" name="prefixo" placeholder="v1, v2...">
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Placa</label>
+                    <input type="text" name="placa" placeholder="ABC-1234">
+                  </div>
+                  <div class="form-group">
+                    <label>Modelo</label>
+                    <input type="text" name="modelo">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Marca</label>
+                    <input type="text" name="marca">
+                  </div>
+                  <div class="form-group">
+                    <label>Ano</label>
+                    <input type="number" name="ano">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Capacidade de Passageiros</label>
+                  <input type="number" name="capacidade">
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Proprietário</label>
+                    <select name="proprietarioId"></select>
+                  </div>
+                  <div class="form-group">
+                    <label>Motorista</label>
+                    <select name="motoristaId"></select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Cobrador</label>
+                    <select name="cobradorId"></select>
+                  </div>
+                  <div class="form-group">
+                    <label>Documentação</label>
+                    <select name="documentacao">
+                      <option value="OK">OK</option>
+                      <option value="Vencida">Vencida</option>
+                      <option value="Em regularização">Em regularização</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row" style="gap:8px;margin-top:16px">
+                  <button type="submit" class="btn primary">Salvar</button>
+                  <button type="button" class="btn ghost" id="cancelVeiculoBtn">Cancelar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pessoas -->
+        <div>
+          <h3>Pessoas (Motoristas, Fiscais, etc)</h3>
+          <button class="btn primary" id="addPessoaBtn">+ Nova Pessoa</button>
+          <div id="pessoasList" style="margin-top:16px"></div>
+          <div id="pessoaModal" class="modal" style="display:none">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h3>Nova Pessoa</h3>
+                <button class="close-modal">&times;</button>
+              </div>
+              <form id="pessoaForm">
+                <div class="form-group">
+                  <label>Nome</label>
+                  <input type="text" name="nome" required>
+                </div>
+                <div class="form-group">
+                  <label>Tipo</label>
+                  <select name="tipo" required>
+                    <option value="">Escolha...</option>
+                    <option value="Motorista">Motorista</option>
+                    <option value="Fiscal">Fiscal</option>
+                    <option value="Proprietário">Proprietário</option>
+                    <option value="Supervisor">Supervisor</option>
+                    <option value="Administrador">Administrador</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Telefone</label>
+                  <input type="tel" name="telefone" placeholder="(71) 9xxxx-xxxx">
+                </div>
+                <div class="form-group">
+                  <label>CPF/CNPJ</label>
+                  <input type="text" name="doc" placeholder="xxx.xxx.xxx-xx">
+                </div>
+                <div class="form-row" style="gap:8px;margin-top:16px">
+                  <button type="submit" class="btn primary">Salvar</button>
+                  <button type="button" class="btn ghost" id="cancelPessoaBtn">Cancelar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ESCALAS -->
+    <div class="panel" id="escalas">
+      <h2>Gestão de Escalas</h2>
+      <p style="color:#6b7683;font-size:14px">Defina as escalas semanais, diárias e por veículo/rota.</p>
+      <div style="margin-top:20px;padding:20px;background:#f0f4ff;border-radius:8px;text-align:center;color:#6b7683">
+        📅 <strong>Escalas</strong> em desenvolvimento. Permite definir motoristas e cobradores por dia/veículo.
+      </div>
+    </div>
+
+    <!-- OPERAÇÃO DO DIA -->
+    <div class="panel" id="operacao">
+      <h2>Operação do Dia</h2>
+      <div style="margin-bottom:20px">
+        <label style="font-weight:700;display:block;margin-bottom:8px">Data:</label>
+        <input type="date" id="opDate" style="padding:10px 12px;border:1px solid var(--hair);border-radius:8px;width:100%;max-width:200px">
+      </div>
+      <button class="btn primary" id="loadOpBtn">Carregar Fila do Dia</button>
+      <div id="filaDisplay" style="margin-top:20px"></div>
+    </div>
+
+    <!-- FINANCEIRO -->
+    <div class="panel" id="financeiro">
+      <h2>Financeiro</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:24px">
+        <div>
+          <h3>Cobrança de Mensalidades</h3>
+          <div id="cobrancasList" style="max-height:400px;overflow-y:auto"></div>
+        </div>
+        <div>
+          <h3>Movimentação Financeira</h3>
+          <div id="movFinanceiraList" style="max-height:400px;overflow-y:auto"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AUDITORIA -->
+    <div class="panel" id="auditoria">
+      <h2>Log de Auditoria</h2>
+      <div style="margin-bottom:16px">
+        <input type="search" id="auditSearch" placeholder="Filtrar por ação, usuário..." style="width:100%;max-width:300px;padding:10px 12px;border:1px solid var(--hair);border-radius:8px">
+      </div>
+      <div id="auditLog" style="max-height:600px;overflow-y:auto"></div>
+    </div>
+
+    <!-- CONFIGURAÇÕES -->
+    <div class="panel" id="config">
+      <h2>Configurações do Sistema</h2>
+      <form id="configForm" style="max-width:600px">
+        <div class="form-group">
+          <label>Intervalo Mínimo entre Saídas (minutos)</label>
+          <input type="number" id="cfgIntervalo" value="10">
+        </div>
+        <div class="form-group">
+          <label>Primeira Saída do Dia</label>
+          <input type="time" id="cfgPrimeiraSaida" value="05:00">
+        </div>
+        <div class="form-group">
+          <label>Tolerância de Atraso (minutos)</label>
+          <input type="number" id="cfgTolerancia" value="3">
+        </div>
+        <div class="form-group">
+          <label>Intervalo Mínimo entre Paradas (minutos)</label>
+          <input type="number" id="cfgIntervaloParada" value="15">
+        </div>
+        <button type="submit" class="btn primary">Salvar Configurações</button>
+      </form>
+    </div>
+
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+requireLogin();
+const user = getUser();
+$("#userNameTop").textContent = user.nome;
+
+// Sidebar navigation
+$$(".sidebar-item").forEach(item => {
+  item.onclick = () => {
+    $$(".sidebar-item").forEach(x => x.classList.remove("active"));
+    item.classList.add("active");
+    const tab = item.dataset.tab;
+    $$(".panel").forEach(p => p.classList.remove("active"));
+    $(`#${tab}`).classList.add("active");
+  };
+});
+
+// Dashboard KPIs
+(async () => {
+  const veiculos = await DB.all("veiculos");
+  const pessoas = await DB.all("pessoas");
+  const motoristas = pessoas.filter(p => p.tipo === "Motorista");
+  const proprietarios = pessoas.filter(p => p.tipo === "Proprietário");
+  const fiscais = pessoas.filter(p => p.tipo === "Fiscal");
+  
+  $("#kpiVeiculos").textContent = veiculos.length;
+  $("#kpiMotoristas").textContent = motoristas.length;
+  $("#kpiProprietarios").textContent = proprietarios.length;
+  $("#kpiFiscais").textContent = fiscais.length;
+
+  // Veículos list
+  $("#veiculosList").innerHTML = veiculos.map(v => 
+    `<div style="background:#f9fafb;padding:12px;border-radius:8px;margin-bottom:8px;font-size:13px">
+      <strong>${esc(v.prefixo)}</strong> — ${esc(v.placa)} (${esc(v.modelo)}) · Cap: ${v.capacidade}
+    </div>`
+  ).join("");
+
+  // Pessoas list
+  $("#pessoasList").innerHTML = pessoas.map(p => 
+    `<div style="background:#f9fafb;padding:12px;border-radius:8px;margin-bottom:8px;font-size:13px">
+      <strong>${esc(p.nome)}</strong> <span style="color:#6b7683">(${p.tipo})</span> · ${esc(p.telefone || "---")}
+    </div>`
+  ).join("");
+
+  // Auditoria
+  const logs = await DB.all("auditlog");
+  renderAuditLog(logs.slice(-20).reverse());
+})();
+
+// Logout
+$("#logoutBtn").onclick = () => { logout(); location.href = "login.html"; };
+
+// Modals
+setupModal("#veiculoModal", "#addVeiculoBtn", "#cancelVeiculoBtn");
+setupModal("#pessoaModal", "#addPessoaBtn", "#cancelPessoaBtn");
+
+$("#veiculoForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const formData = new FormData(e.target);
+  const veiculo = Object.fromEntries(formData);
+  veiculo.capacidade = parseInt(veiculo.capacidade);
+  await DB.put("veiculos", veiculo);
+  logAuditAction("Cadastro de veículo", `${veiculo.prefixo} (${veiculo.placa})`);
+  toast("Veículo salvo");
+  e.target.reset();
+  location.reload();
+};
+
+$("#pessoaForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const formData = new FormData(e.target);
+  const pessoa = Object.fromEntries(formData);
+  pessoa.id = pessoa.id || `p_${Date.now()}`;
+  pessoa.situacao = "Ativo";
+  await DB.put("pessoas", pessoa);
+  logAuditAction("Cadastro de pessoa", `${pessoa.nome} (${pessoa.tipo})`);
+  toast("Pessoa salva");
+  e.target.reset();
+  location.reload();
+};
+
+// Config form
+$("#configForm").onsubmit = (e) => {
+  e.preventDefault();
+  const cfg = {
+    INTERVALO_MIN: parseInt($("#cfgIntervalo").value),
+    PRIMEIRA_SAIDA: $("#cfgPrimeiraSaida").value,
+    TOLERANCIA_MIN: parseInt($("#cfgTolerancia").value),
+    INTERVALO_PARADA_MIN: parseInt($("#cfgIntervaloParada").value)
+  };
+  localStorage.setItem("coop_config", JSON.stringify(cfg));
+  logAuditAction("Alteração de configurações", JSON.stringify(cfg));
+  toast("Configurações salvas");
+};
+
+// Operação do dia
+$("#loadOpBtn").onclick = async () => {
+  const date = $("#opDate").value;
+  if(!date) { toast("Escolha uma data","stop"); return; }
+  const fila = await FILA.build(date, ROTA_PADRAO);
+  $("#filaDisplay").innerHTML = fila.map((v, i) => 
+    `<div style="background:#f9fafb;padding:12px;border-radius:8px;margin-bottom:8px;font-size:13px">
+      <strong>#${i+1}</strong> ${esc(v.veiculoId)} · Saída: ${v.paradas[0]?.previsto || "---"}
+    </div>`
+  ).join("");
+};
+
+// Auditoria search
+$("#auditSearch").oninput = async () => {
+  const q = $("#auditSearch").value.toLowerCase();
+  const logs = await DB.all("auditlog");
+  const filtered = logs.filter(l => l.acao.toLowerCase().includes(q) || l.usuario.toLowerCase().includes(q));
+  renderAuditLog(filtered.slice(-20).reverse());
+};
+
+function renderAuditLog(logs) {
+  $("#auditLog").innerHTML = logs.map(l => 
+    `<div class="audit-entry">
+      <div class="audit-time">${new Date(l.ts).toLocaleString("pt-BR")}</div>
+      <div class="audit-action">${esc(l.acao)}</div>
+      <div style="color:#6b7683">Usuário: <strong>${esc(l.usuario)}</strong> · ${esc(l.detalhe || "---")}</div>
+    </div>`
+  ).join("");
+}
+
+function setupModal(modalId, openBtnId, closeBtnId) {
+  const modal = $(modalId);
+  const openBtn = $(openBtnId);
+  const closeBtn = $(closeBtnId);
+  
+  openBtn.onclick = () => { modal.style.display = "flex"; modal.classList.add("active"); };
+  closeBtn.onclick = () => { modal.style.display = "none"; modal.classList.remove("active"); };
+  modal.onclick = (e) => { if(e.target === modal) { modal.style.display = "none"; modal.classList.remove("active"); } };
+}
+
+// Load config into form
+(async () => {
+  const cfg = await getConfig();
+  $("#cfgIntervalo").value = cfg.INTERVALO_MIN;
+  $("#cfgPrimeiraSaida").value = cfg.PRIMEIRA_SAIDA;
+  $("#cfgTolerancia").value = cfg.TOLERANCIA_MIN;
+  $("#cfgIntervaloParada").value = cfg.INTERVALO_PARADA_MIN;
+})();
+</script>
+</body>
+</html>

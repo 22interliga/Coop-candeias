@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Painel de Operação</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .op-header{ background:linear-gradient(135deg, #2a3f86 0%, #1a2547 100%);color:#fff;padding:24px }
+  .op-header h1{ margin:0;font-size:24px }
+  .op-header .subtitle{ font-size:13px;color:#b0c4f0;margin-top:4px }
+  .tab-bar{ background:#fff;border-bottom:1px solid var(--hair);display:flex;padding:0 24px }
+  .tab{ padding:16px 24px;cursor:pointer;font-weight:600;color:#6b7683;border-bottom:3px solid transparent;transition:.2s;font-size:14px }
+  .tab:hover{ color:var(--text) }
+  .tab.active{ color:#2a3f86;border-bottom-color:#2a3f86 }
+  .content{ padding:32px }
+  .panel{ display:none }
+  .panel.active{ display:block }
+  .fila-card{ background:#f9fafb;border-radius:12px;padding:16px;margin-bottom:12px;border-left:4px solid #2a3f86 }
+  .fila-card .pos{ font-size:24px;font-weight:900;color:#2a3f86;display:inline-block;width:40px;height:40px;
+    text-align:center;line-height:40px;background:#fff;border-radius:8px;margin-right:12px }
+  .fila-info{ display:inline-block;vertical-align:middle }
+  .fila-info strong{ display:block;font-size:14px }
+  .fila-info small{ color:#6b7683;font-size:12px;display:block;margin-top:4px }
+  .fila-paradas{ margin-top:12px;padding-top:12px;border-top:1px solid var(--hair);font-size:12px }
+  .parada-item{ display:flex;justify-content:space-between;color:#6b7683;margin:4px 0 }
+  .parada-item strong{ color:var(--text) }
+  @media(max-width:768px){
+    .tab-bar{ overflow-x:auto }
+    .content{ padding:16px }
+  }
+</style>
+</head>
+<body>
+<div class="op-header">
+  <h1>🎯 Painel de Operação</h1>
+  <div class="subtitle">Gerenciamento da Frota e Escalas</div>
+  <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center">
+    <div style="font-size:13px;color:#b0c4f0">Logado como: <strong id="userNameTop" style="color:#fff"></strong></div>
+    <button class="btn ghost" id="logoutBtn" style="color:#b0c4f0;border-color:#b0c4f0;padding:6px 12px;font-size:12px">Sair</button>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <div class="tab active" data-tab="fila">📋 Fila do Dia</div>
+  <div class="tab" data-tab="escalas">📅 Escalas</div>
+  <div class="tab" data-tab="substituicoes">🔄 Substituições</div>
+  <div class="tab" data-tab="penalidades">⚠️ Penalidades</div>
+</div>
+
+<div class="content">
+
+  <!-- FILA DO DIA -->
+  <div class="panel active" id="fila">
+    <h2>Fila de Hoje</h2>
+    <div style="display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap;align-items:flex-end">
+      <div>
+        <label style="display:block;font-weight:700;font-size:14px;margin-bottom:8px">Data</label>
+        <input type="date" id="opDate" style="padding:10px 12px;border:1px solid var(--hair);border-radius:8px">
+      </div>
+      <button class="btn primary" id="loadFilaBtn">Carregar Fila</button>
+    </div>
+
+    <div id="filaContainer" style="max-height:500px;overflow-y:auto"></div>
+
+    <div style="margin-top:24px;background:#f0f4ff;border-radius:8px;padding:16px">
+      <h3 style="margin-top:0">Ajustar Intervalo de Saídas</h3>
+      <p style="color:#6b7683;font-size:13px">Altere o intervalo para recalcular toda a fila automaticamente.</p>
+      <div style="display:flex;gap:12px;align-items:flex-end">
+        <div>
+          <label style="display:block;font-weight:700;font-size:14px;margin-bottom:8px">Intervalo (min)</label>
+          <input type="number" id="intervaloInput" min="5" max="60" style="width:80px;padding:10px 12px;border:1px solid var(--hair);border-radius:8px">
+        </div>
+        <button class="btn primary" id="recalcFilaBtn">Recalcular Fila</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ESCALAS -->
+  <div class="panel" id="escalas">
+    <h2>Escala Semanal</h2>
+    <p style="color:#6b7683;font-size:14px;margin-bottom:24px">Edite o motorista e cobrador para cada veículo nos dias da semana.</p>
+    
+    <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--hair)">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f4f5f7;border-bottom:2px solid var(--hair)">
+            <th style="padding:12px;text-align:left;font-weight:700;color:#2a3f86">Veículo</th>
+            <th style="padding:12px;text-align:center;font-weight:700;color:#2a3f86">SEG</th>
+            <th style="padding:12px;text-align:center;font-weight:700;color:#2a3f86">TER</th>
+            <th style="padding:12px;text-align:center;font-weight:700;color:#2a3f86">QUA</th>
+            <th style="padding:12px;text-align:center;font-weight:700;color:#2a3f86">QUI</th>
+            <th style="padding:12px;text-align:center;font-weight:700;color:#2a3f86">SEX</th>
+            <th style="padding:12px;text-align:center;font-weight:700;color:#2a3f86">SAB</th>
+            <th style="padding:12px;text-align:center;font-weight:700;color:#2a3f86">DOM</th>
+          </tr>
+        </thead>
+        <tbody id="escalaMatriz"></tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:24px;display:flex;gap:12px">
+      <button class="btn primary" id="salvarEscalaBtn">💾 Salvar Escala</button>
+      <button class="btn ghost" id="cancelarEscalaBtn">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- SUBSTITUIÇÕES -->
+  <div class="panel" id="substituicoes">
+    <h2>Substituição de Veículos</h2>
+    <p style="color:#6b7683;font-size:14px">Se um veículo quebrou ou ficou indisponível, escolha um substituto para a operação.</p>
+    
+    <div style="background:#fff;border:1px solid var(--hair);border-radius:8px;padding:24px;margin-top:16px;max-width:500px">
+      <div class="form-group">
+        <label style="font-weight:700;font-size:14px;margin-bottom:8px">Veículo a Substituir</label>
+        <select id="subVeiculoSai" style="width:100%;padding:10px 12px;border:1px solid var(--hair);border-radius:8px">
+          <option value="">Escolha...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label style="font-weight:700;font-size:14px;margin-bottom:8px">Veículo Substituto</label>
+        <select id="subVeiculoEntra" style="width:100%;padding:10px 12px;border:1px solid var(--hair);border-radius:8px">
+          <option value="">Escolha...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label style="font-weight:700;font-size:14px;margin-bottom:8px">Motivo</label>
+        <input type="text" id="subMotivo" placeholder="Ex: Pane mecânica" style="width:100%;padding:10px 12px;border:1px solid var(--hair);border-radius:8px">
+      </div>
+      <button class="btn primary" id="confirmSubBtn" style="width:100%;margin-top:16px">Confirmar Substituição</button>
+    </div>
+
+    <div id="subHistorico" style="margin-top:32px;max-height:300px;overflow-y:auto"></div>
+  </div>
+
+  <!-- PENALIDADES -->
+  <div class="panel" id="penalidades">
+    <h2>Penalidades Aplicadas</h2>
+    <p style="color:#6b7683;font-size:14px">Registro de penalidades por atraso ou irregularidade (aplicadas pelo Fiscal).</p>
+    
+    <div id="penalList" style="max-height:400px;overflow-y:auto;margin-top:16px"></div>
+
+    <div style="background:#fff3cd;border-radius:8px;padding:16px;margin-top:24px;font-size:13px;color:#664d03">
+      <strong>ℹ️ Penalidades são registradas pelo Fiscal</strong><br>
+      O Fiscal detecta atrasos e registra ocorrências automaticamente através do módulo de Fiscalização.
+    </div>
+  </div>
+
+</div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+requireLogin();
+const user = getUser();
+$("#userNameTop").textContent = user.nome;
+
+$("#opDate").valueAsDate = new Date();
+
+// TABS
+$$("#tab .tab").forEach(tab => {
+  tab.onclick = () => {
+    $$("#tab .tab").forEach(x => x.classList.remove("active"));
+    tab.classList.add("active");
+    const tabId = tab.dataset.tab;
+    $$(".panel").forEach(p => p.classList.remove("active"));
+    $(`#${tabId}`).classList.add("active");
+  };
+});
+
+// FILA
+let currentFila = [];
+
+$("#loadFilaBtn").onclick = async () => {
+  const date = $("#opDate").value;
+  if(!date) { toast("Escolha uma data","stop"); return; }
+  currentFila = await FILA.build(date, COOP.ROTA_PADRAO);
+  renderFila(currentFila);
+  $("#intervaloInput").value = COOP.INTERVALO_MIN;
+};
+
+function renderFila(fila) {
+  $("#filaContainer").innerHTML = fila.map((v, i) => {
+    const primParada = v.paradas[0];
+    const ultParada = v.paradas[v.paradas.length-1];
+    return `
+      <div class="fila-card">
+        <span class="pos">${i+1}</span>
+        <div class="fila-info">
+          <strong>${esc(v.veiculoId)} (${esc(v.status || "---")})</strong>
+          <small>Saída prevista: ${primParada?.previsto || "---"} · Chegada: ${ultParada?.previsto || "---"}</small>
+        </div>
+        <div class="fila-paradas">
+          ${v.paradas.map((p, pi) => `
+            <div class="parada-item">
+              <span>${pi+1}. ${esc(p.nome)} ${p.real ? `(${p.real})` : ""}</span>
+              <strong>${p.previsto}</strong>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+$("#recalcFilaBtn").onclick = async () => {
+  const date = $("#opDate").value;
+  const intervalo = parseInt($("#intervaloInput").value);
+  if(!intervalo) { toast("Digite o intervalo","stop"); return; }
+  
+  currentFila = await FILA.build(date, COOP.ROTA_PADRAO);
+  currentFila = await FILA.reindex(date, currentFila, intervalo);
+  renderFila(currentFila);
+  logAuditAction("Recalcular fila", `intervalo: ${intervalo}min`);
+  toast("Fila recalculada");
+};
+
+// ESCALAS
+async function renderEscalaMatriz() {
+  const veiculos = await DB.all("veiculos");
+  const pessoas = await DB.all("pessoas");
+  
+  let html = "";
+  
+  for(const v of veiculos) {
+    html += `<tr style="border-bottom:1px solid var(--hair)">
+      <td style="padding:12px;font-weight:700;background:#f9fafb">${esc(v.prefixo)}<br><small style="color:#6b7683;font-weight:400">${esc(v.placa)}</small></td>`;
+    
+    for(let dia = 0; dia < 7; dia++) {
+      const escalaDia = v.escalaDias ? v.escalaDias[dia] : null;
+      const ativo = Array.isArray(v.escalaDias) && v.escalaDias[dia] !== undefined && v.escalaDias[dia] !== false;
+      
+      html += `<td style="padding:8px;text-align:center;background:${ativo ? '#e8f5e9' : '#fafafa'}">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <select data-veiculo="${v.id}" data-dia="${dia}" data-tipo="motorista" style="padding:4px;font-size:11px;border:1px solid var(--hair);border-radius:4px">
+            <option value="">---</option>
+            ${pessoas.filter(p => p.tipo === "Motorista").map(p => `<option value="${p.id}" ${escalaDia?.motoristaId === p.id ? 'selected' : ''}>${p.nome.split(' ')[0]}</option>`).join('')}
+          </select>
+          <select data-veiculo="${v.id}" data-dia="${dia}" data-tipo="cobrador" style="padding:4px;font-size:11px;border:1px solid var(--hair);border-radius:4px">
+            <option value="">---</option>
+            ${pessoas.filter(p => p.tipo === "Motorista").map(p => `<option value="${p.id}" ${escalaDia?.cobradorId === p.id ? 'selected' : ''}>${p.nome.split(' ')[0]}</option>`).join('')}
+          </select>
+          <label style="font-size:11px;display:flex;align-items:center;justify-content:center;gap:4px">
+            <input type="checkbox" data-veiculo="${v.id}" data-dia="${dia}" data-tipo="ativo" ${ativo ? 'checked' : ''}>
+            Ativo
+          </label>
+        </div>
+      </td>`;
+    }
+    
+    html += `</tr>`;
+  }
+  
+  $("#escalaMatriz").innerHTML = html;
+}
+
+$("#salvarEscalaBtn").onclick = async () => {
+  const veiculos = await DB.all("veiculos");
+  
+  for(const v of veiculos) {
+    const escalaDias = [];
+    
+    for(let dia = 0; dia < 7; dia++) {
+      const ativoInput = $(`input[data-veiculo="${v.id}"][data-dia="${dia}"][data-tipo="ativo"]`);
+      const ativo = ativoInput?.checked;
+      
+      if(ativo) {
+        const motoristaSelect = $(`select[data-veiculo="${v.id}"][data-dia="${dia}"][data-tipo="motorista"]`);
+        const cobradorSelect = $(`select[data-veiculo="${v.id}"][data-dia="${dia}"][data-tipo="cobrador"]`);
+        
+        escalaDias[dia] = {
+          motoristaId: motoristaSelect?.value || "",
+          cobradorId: cobradorSelect?.value || ""
+        };
+      }
+    }
+    
+    v.escalaDias = escalaDias;
+    await DB.put("veiculos", v);
+  }
+  
+  logAuditAction("Escala semanal alterada", JSON.stringify({veiculos: veiculos.length}));
+  toast("Escala salva! Recalculando filas...");
+  
+  const hoje = new Date();
+  for(let i = 0; i < 7; i++) {
+    const data = new Date(hoje);
+    data.setDate(data.getDate() + i);
+    const dateStr = data.toISOString().split("T")[0];
+    await FILA.build(dateStr, COOP.ROTA_PADRAO);
+  }
+  
+  toast("Filas recalculadas com sucesso!");
+  renderEscalaMatriz();
+};
+
+$("#cancelarEscalaBtn").onclick = () => renderEscalaMatriz();
+
+renderEscalaMatriz();
+
+// SUBSTITUIÇÕES
+(async () => {
+  const veiculos = await DB.all("veiculos");
+  const selSai = $("#subVeiculoSai");
+  const selEntra = $("#subVeiculoEntra");
+  veiculos.forEach(v => {
+    selSai.innerHTML += `<option value="${v.id}">${esc(v.prefixo)} (${esc(v.placa)})</option>`;
+    selEntra.innerHTML += `<option value="${v.id}">${esc(v.prefixo)} (${esc(v.placa)})</option>`;
+  });
+})();
+
+$("#confirmSubBtn").onclick = async () => {
+  const saiId = $("#subVeiculoSai").value;
+  const entraId = $("#subVeiculoEntra").value;
+  const motivo = $("#subMotivo").value;
+  
+  if(!saiId || !entraId || !motivo) { toast("Preencha todos os campos","stop"); return; }
+  if(saiId === entraId) { toast("Escolha veículos diferentes","stop"); return; }
+  
+  const date = $("#opDate").value;
+  await DB.put("substituicoes", {
+    id: `sub_${Date.now()}`,
+    data: date,
+    saiuId: saiId,
+    entrouId: entraId,
+    motivo: motivo,
+    supervisorId: user.id,
+    ts: new Date().toISOString()
+  });
+  
+  logAuditAction("Substituição de veículo", `${saiId} → ${entraId} (${motivo})`);
+  toast("Substituição registrada");
+  
+  $("#subVeiculoSai").value = "";
+  $("#subVeiculoEntra").value = "";
+  $("#subMotivo").value = "";
+  
+  await $("#loadFilaBtn").click();
+};
+
+(async () => {
+  const date = $("#opDate").value;
+  const subs = await DB.all("substituicoes");
+  const subsDia = subs.filter(s => s.data === date);
+  $("#subHistorico").innerHTML = subsDia.map(s => 
+    `<div style="background:#f9fafb;border-radius:8px;padding:12px;margin-bottom:8px;font-size:13px">
+      <strong>${esc(s.saiuId)}</strong> → <strong>${esc(s.entrouId)}</strong><br>
+      <small style="color:#6b7683">Motivo: ${esc(s.motivo)} · ${new Date(s.ts).toLocaleTimeString("pt-BR")}</small>
+    </div>`
+  ).join("");
+})();
+
+(async () => {
+  const date = $("#opDate").value;
+  const pens = await DB.all("penalidades");
+  const pensDia = pens.filter(p => p.data === date);
+  $("#penalList").innerHTML = pensDia.map(p => 
+    `<div style="background:#fff3cd;border-radius:8px;padding:12px;margin-bottom:8px;font-size:13px">
+      <strong>${esc(p.veiculoId || "---")}</strong> · ${p.motivo}<br>
+      <small style="color:#664d03">Posições: ${p.posicoes} · ${new Date(p.ts).toLocaleTimeString("pt-BR")}</small>
+    </div>`
+  ).join("") || "<p style='color:#6b7683'>Nenhuma penalidade registrada.</p>";
+})();
+
+$("#logoutBtn").onclick = () => { logout(); location.href = "login.html"; };
+</script>
+</body>
+</html>

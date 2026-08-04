@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101826">
+<link rel="manifest" href="manifest.json">
+<title>Cobranças · Cooperativa</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .wa{background:#25d366;color:#062e16;border-color:#25d366}
+  .wa:hover{filter:brightness(1.05)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <div><div class="eyebrow">Cobranças dos cooperados</div><h1>Mensalidade e taxa semanal</h1></div>
+    <div class="btn-row">
+      <button class="btn ghost" id="btnAviso">Enviar aviso</button>
+      <button class="btn" id="btnGerar">Gerar cobrança</button>
+    </div>
+  </div>
+
+  <div class="grid g-3 mb" id="kpis"></div>
+
+  <div class="card">
+    <div class="card-h"><h3>Cobranças</h3>
+      <div class="seg" id="filtro">
+        <button class="active" data-f="all">Todas</button>
+        <button data-f="open">Em aberto</button>
+        <button data-f="paid">Quitadas</button>
+      </div>
+    </div>
+    <div class="card-b" id="lista"></div>
+  </div>
+</div>
+
+<!-- Modal gerar -->
+<div class="modal-bg" id="mGer"><div class="modal">
+  <div class="m-h"><h3>Gerar cobrança</h3><button class="x" onclick="closeModal('mGer')">×</button></div>
+  <div class="m-b">
+    <div class="form-grid">
+      <div class="field"><label>Tipo</label><select id="gTipo">
+        <option>Mensalidade</option><option>Taxa semanal</option></select></div>
+      <div class="field"><label>Valor por cooperado (R$)</label><input class="input" id="gValor" type="number" step="0.01"></div>
+      <div class="field"><label>Referência</label><input class="input" id="gRef"></div>
+      <div class="field"><label>Vencimento</label><input class="input" id="gVenc" type="date"></div>
+    </div>
+    <div class="hint">Cria uma cobrança para cada cooperado (proprietário). Cobranças já existentes com a mesma referência são ignoradas.</div>
+    <div class="banner mt" id="gInfo"></div>
+  </div>
+  <div class="m-f"><button class="btn ghost" onclick="closeModal('mGer')">Cancelar</button>
+    <button class="btn" id="gOk">Gerar para todos</button></div>
+</div></div>
+
+<!-- Modal aviso geral -->
+<div class="modal-bg" id="mAviso"><div class="modal">
+  <div class="m-h"><h3>Aviso aos cooperados</h3><button class="x" onclick="closeModal('mAviso')">×</button></div>
+  <div class="m-b">
+    <div class="field"><label>Mensagem</label>
+      <textarea id="avMsg" rows="3" placeholder="Ex.: Reunião no sábado às 8h no ponto de apoio."></textarea></div>
+    <button class="btn ghost sm" id="avGerar">Gerar links do WhatsApp</button>
+    <div id="avLinks" class="mt"></div>
+    <div class="hint mt">O WhatsApp não deixa disparar pra todos de uma vez pelo navegador — abra um a um pelos links (a mensagem já vai pronta).</div>
+  </div>
+</div></div>
+
+<script src="config.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+<script>
+let PES=[], COB=[], FILT="all";
+
+boot("cobrancas.html", async ()=>{
+  $("#btnGerar").onclick=openGerar;
+  $("#btnAviso").onclick=()=>{ $("#avLinks").innerHTML=""; $("#avMsg").value=""; openModal("mAviso"); };
+  $("#gTipo").onchange=refFromTipo;
+  $("#gOk").onclick=gerar;
+  $("#avGerar").onclick=avisoLinks;
+  $$("#filtro button").forEach(b=>b.onclick=()=>{
+    $$("#filtro button").forEach(x=>x.classList.remove("active")); b.classList.add("active");
+    FILT=b.dataset.f; render();
+  });
+  await load(); render();
+});
+
+function coops(){ return PES.filter(p=>p.tipo==="Proprietário"); }
+async function load(){ [PES,COB]=await Promise.all([DB.all("pessoas"),DB.all("cobrancas")]); }
+
+function waLink(tel,msg){
+  let d=String(tel||"").replace(/\D/g,"");
+  if(!d) return null;
+  if(!d.startsWith("55")) d="55"+d;
+  return `https://wa.me/${d}?text=${encodeURIComponent(msg)}`;
+}
+function msgCobranca(c,nome){
+  const venc=(c.vencimento||"").split("-").reverse().join("/");
+  const st=c.situacao==="Quitado"?"quitada ✅":"em aberto";
+  return `Olá ${nome}! ${c.tipo} (${c.referencia}) — ${money(c.valor)}, vencimento ${venc}. Situação: ${st}. Cooperativa ${COOP.ROTA}.`;
+}
+
+function refFromTipo(){
+  const t=$("#gTipo").value, d=new Date();
+  if(t==="Mensalidade"){
+    $("#gRef").value = d.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+  }else{
+    const seg=new Date(d); seg.setDate(d.getDate()-((d.getDay()+6)%7));
+    const dom=new Date(seg); dom.setDate(seg.getDate()+6);
+    const f=x=>x.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+    $("#gRef").value = `Semana ${f(seg)}–${f(dom)}`;
+  }
+}
+function openGerar(){
+  refFromTipo();
+  const d=new Date(); d.setDate(d.getDate()+7);
+  $("#gVenc").value=d.toISOString().slice(0,10);
+  $("#gValor").value="";
+  $("#gInfo").textContent=`${coops().length} cooperado(s) receberão esta cobrança.`;
+  openModal("mGer");
+}
+async function gerar(){
+  const valor=Number($("#gValor").value); if(!valor) return toast("Informe o valor","stop");
+  const tipo=$("#gTipo").value, ref=$("#gRef").value, venc=$("#gVenc").value;
+  let novas=0, pulou=0;
+  for(const co of coops()){
+    const existe=COB.find(c=>c.cooperadoId===co.id && c.tipo===tipo && c.referencia===ref);
+    if(existe){ pulou++; continue; }
+    await DB.put("cobrancas",{cooperadoId:co.id, tipo, valor, referencia:ref,
+      vencimento:venc, situacao:"Aberto", pagoEm:"", finId:"", ts:Date.now()});
+    novas++;
+  }
+  closeModal("mGer"); await load(); render();
+  toast(`${novas} gerada(s)`+(pulou?` · ${pulou} já existiam`:""),"go");
+}
+
+async function quitar(id){
+  const c=COB.find(x=>x.id===id); if(!c) return;
+  const nome=nameOf(PES,c.cooperadoId);
+  const fin=await DB.put("financeiro",{tipo:c.tipo==="Mensalidade"?"Mensalidade":"Taxa",
+    valor:Math.abs(c.valor), descricao:`${c.tipo} ${nome} (${c.referencia})`, data:T.today()});
+  c.situacao="Quitado"; c.pagoEm=T.today(); c.finId=fin.id;
+  await DB.put("cobrancas",c); await load(); render(); toast("Baixa registrada · entrou no caixa","go");
+}
+async function reabrir(id){
+  const c=COB.find(x=>x.id===id); if(!c) return;
+  if(c.finId) await DB.del("financeiro",c.finId);
+  c.situacao="Aberto"; c.pagoEm=""; c.finId="";
+  await DB.put("cobrancas",c); await load(); render(); toast("Reaberta · removida do caixa");
+}
+
+function render(){
+  const abertas=COB.filter(c=>c.situacao==="Aberto");
+  const emAberto=abertas.reduce((s,c)=>s+Number(c.valor||0),0);
+  const hoje=T.today();
+  const vencidas=abertas.filter(c=>c.vencimento && c.vencimento<hoje).length;
+  const mes=hoje.slice(0,7);
+  const quitMes=COB.filter(c=>c.situacao==="Quitado" && (c.pagoEm||"").slice(0,7)===mes)
+    .reduce((s,c)=>s+Number(c.valor||0),0);
+  const kpi=(k,v,sub,cls)=>`<div class="card stat ${cls||""}"><div class="k">${k}</div>
+    <div class="v small">${v}</div><div class="sub">${sub||""}</div></div>`;
+  $("#kpis").innerHTML=
+    kpi("Em aberto",money(emAberto),abertas.length+" cobrança(s)","accent")+
+    kpi("Vencidas",String(vencidas),"cooperados em atraso")+
+    kpi("Recebido no mês",money(quitMes),"cobranças quitadas");
+
+  let rows=[...COB].sort((a,b)=>(a.situacao===b.situacao?0:a.situacao==="Aberto"?-1:1) || (a.vencimento||"").localeCompare(b.vencimento||""));
+  if(FILT==="open") rows=rows.filter(c=>c.situacao==="Aberto");
+  if(FILT==="paid") rows=rows.filter(c=>c.situacao==="Quitado");
+
+  $("#lista").innerHTML = rows.length ? `<table class="table"><thead><tr>
+    <th>Cooperado</th><th>Tipo</th><th>Referência</th><th>Venc.</th><th class="right">Valor</th>
+    <th>Situação</th><th></th></tr></thead><tbody>`+
+    rows.map(c=>{
+      const nome=nameOf(PES,c.cooperadoId);
+      const co=PES.find(p=>p.id===c.cooperadoId)||{};
+      const venc=(c.vencimento||"").split("-").reverse().join("/");
+      const atras=c.situacao==="Aberto" && c.vencimento && c.vencimento<T.today();
+      const chip=c.situacao==="Quitado"?'<span class="chip go"><i></i>Quitado</span>'
+        : atras?'<span class="chip stop"><i></i>Vencida</span>':'<span class="chip warn"><i></i>Em aberto</span>';
+      const wa=waLink(co.telefone, msgCobranca(c,nome));
+      return `<tr>
+        <td><b>${esc(nome)}</b></td><td>${esc(c.tipo)}</td>
+        <td class="muted">${esc(c.referencia)}</td><td class="num">${venc}</td>
+        <td class="right num" style="font-weight:700">${money(c.valor)}</td>
+        <td>${chip}</td>
+        <td class="right"><div class="btn-row" style="justify-content:flex-end">
+          ${wa?`<a class="btn sm wa" href="${wa}" target="_blank" rel="noopener">WhatsApp</a>`:`<button class="btn sm ghost" disabled title="sem telefone">WhatsApp</button>`}
+          ${c.situacao==="Aberto"
+            ? `<button class="btn sm" data-q="${c.id}">Quitar</button>`
+            : `<button class="btn sm ghost" data-r="${c.id}">Reabrir</button>`}
+        </div></td></tr>`;
+    }).join("")+`</tbody></table>`
+    : `<div class="table-empty">Nenhuma cobrança. Clique em “Gerar cobrança”.</div>`;
+
+  $$("#lista [data-q]").forEach(b=>b.onclick=()=>quitar(b.dataset.q));
+  $$("#lista [data-r]").forEach(b=>b.onclick=()=>reabrir(b.dataset.r));
+}
+
+function avisoLinks(){
+  const msg=$("#avMsg").value.trim(); if(!msg) return toast("Escreva a mensagem","stop");
+  const list=coops();
+  $("#avLinks").innerHTML = list.map(co=>{
+    const wa=waLink(co.telefone, msg);
+    return `<div class="list-row"><span>${esc(co.nome)}</span>
+      ${wa?`<a class="btn sm wa" href="${wa}" target="_blank" rel="noopener">Enviar</a>`
+          :`<span class="chip mut"><i></i>sem telefone</span>`}</div>`;
+  }).join("");
+}
+</script>
+</body>
+</html>
