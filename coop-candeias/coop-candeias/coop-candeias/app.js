@@ -16,6 +16,14 @@ function getUser(){ try{ return JSON.parse(localStorage.getItem(COOP.COL+"user")
 function logout(){ localStorage.removeItem(COOP.COL+"user"); location.href="login.html"; }
 function requireLogin(){ if(!getUser()) { location.href="login.html"; throw new Error("Not logged in"); } }
 
+function getConfig(){
+  return {
+    INTERVALO_MIN: COOP.INTERVALO_MIN,
+    PRIMEIRA_SAIDA: COOP.PRIMEIRA_SAIDA,
+    TOLERANCIA_MIN: COOP.TOLERANCIA_MIN
+  };
+}
+
 const NAV = [
   ["index.html","Painel"],
   ["operacao.html","Operação"],
